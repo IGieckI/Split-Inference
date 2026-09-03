@@ -86,9 +86,12 @@ logging:
 # Simulation-only knobs (scripts/sim_node.py; NOT used on hardware) - Synthetic
 sim:
   goodput_bytes_per_s: {good: 900000, mid: 250000, bad: 45000}
+  rssi_dbm: {A: -62, B: -50, C: -75}  # per-tier link profile (mid/good/bad bins)
   capture_ms: {camera: 45, flash: 2}
   jpeg_encode_ms: {camera: 30, flash: 1}
   t_edge_ms:                          # per tier, per arm, at 240 MHz
-    A: {k_shallow: 25, k_deep: 55}
-    B: {k_shallow: 60, k_deep: 140}
-    C: {k_shallow: 180}
+    A: {k_shallow: 15, k_deep: 50}    # deep: flat-optimal but phase-average-suboptimal
+    B: {k_shallow: 35, k_deep: 120}
+    C: {k_shallow: 90}
+  # Dev host runs the tail ~10x faster than a Pi 4
+  tail_extra_ms: {k0: 65, k_shallow: 20, k_deep: 8}

@@ -105,7 +105,9 @@ async def amain(args):
     server = FleetServer(cfg, registry, logger)
     await server.start(args.bind)
     reassembler = Reassembler(cfg, server.send_data)
-    tail = Tail(cfg)
+    tail = Tail(cfg, sim_extra_ms=cfg.sim.tail_extra_ms if args.sim_tail else None)
+    if args.sim_tail:
+        print(f"[experiment] SIM tail emulation on: {cfg.sim.tail_extra_ms}")
     tail.start()
     timesync = TimeSync(cfg, server.send_sync)
     scheduler = Scheduler(cfg, registry, policy, reward, reassembler, tail, server, logger)
@@ -127,6 +129,9 @@ async def amain(args):
         stop = lambda: reward.warmup_complete(node_ids)
     elif args.mode == "sweep":
         stop = lambda: all(policy.done(n) for n in node_ids)
+    elif args.min_ok == 0:
+        stop = lambda: False  # duration-driven run (trace-aligned; --max-duration)
+        assert args.max_duration, "--min-ok 0 requires --max-duration"
     else:
         target = args.min_ok or cfg.experiment.learning_min_ok_per_node
         stop = lambda: all(scheduler.ok_count.get(n, 0) >= target for n in node_ids)
@@ -166,6 +171,8 @@ def main():
     ap.add_argument("--max-duration", type=float, default=None, help="hard wall-clock cap (s)")
     ap.add_argument("--bind", default="0.0.0.0")
     ap.add_argument("--settle", type=float, default=2.0)
+    ap.add_argument("--sim-tail", action="store_true",
+                    help="add config sim.tail_extra_ms to tail latency (dev-host Pi emulation)")
     asyncio.run(amain(ap.parse_args()))
 
 

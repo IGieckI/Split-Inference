@@ -28,9 +28,10 @@ class TailResult:
 
 
 class Tail:
-    def __init__(self, cfg: Config, num_threads: int = 2):
+    def __init__(self, cfg: Config, num_threads: int = 2, sim_extra_ms: dict | None = None):
         art = ROOT / cfg.model.artifacts_dir
         self.cfg = cfg
+        self.sim_extra_ms = sim_extra_ms  # dev-host Pi-speed emulation (config sim.tail_extra_ms)
         self.cuts = json.loads((art / "cuts.json").read_text())
         self.interp = {}
         self.input_detail = {}
@@ -84,4 +85,6 @@ class Tail:
         it.set_tensor(detail["index"], x)
         it.invoke()
         out = it.get_tensor(self.output_detail[arm]["index"])
+        if self.sim_extra_ms:
+            time.sleep(self.sim_extra_ms.get(arm, 0.0) / 1000)
         return int(np.argmax(out[0])), (time.monotonic_ns() - t0) // 1000

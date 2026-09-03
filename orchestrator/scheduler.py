@@ -87,8 +87,11 @@ class Scheduler:
                     res = None
                 except asyncio.TimeoutError:
                     status = "TIMEOUT"
-                    self.reassembler.abort(req_id)  # sends ABORT to the device
+                    self.reassembler.abort(req_id)  # ABORT via data path if addr known
+                    # All-fragments-lost case
+                    self.server.send_ctrl(st.ctrl_addr, P.pack(P.ABORT, node_id, req_id))
             else:
+                tensor_fut.cancel()  # nobody awaits it on this path
                 self.registry.mark_lost(node_id)
                 self.reassembler.abort(req_id, notify_device=False)
                 print(f"[scheduler] node {node_id}: {cfg.protocol.assign_max_retries} "
