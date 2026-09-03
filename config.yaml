@@ -31,12 +31,12 @@ cuts:
   - name: k0
     boundary_op: null                 # full offload: JPEG on the air, full model on Pi
     tensor_name: null
-  - name: k_shallow
-    boundary_op: null                 # PINNED AFTER M1 `make slice-list`
-    tensor_name: null
-  - name: k_deep
-    boundary_op: null                 # PINNED AFTER M1 `make slice-list`
-    tensor_name: null
+  - name: k_shallow                   # after inverted-residual block 2 (spec k2 role)
+    boundary_op: 11                   # 24x24x8 = 4608 B on air
+    tensor_name: "functional_1/block_2_add_1/Add"
+  - name: k_deep                      # after inverted-residual block 6 (spec k4 role)
+    boundary_op: 25                   # 6x6x24 = 864 B on air (< JPEG)
+    tensor_name: "functional_1/block_6_project_BN_1/batchnorm/add_1;functional_1/block_6_project_1/convolution;functional_1/block_6_project_BN_1/batchnorm/sub"
 
 # Phase-1 fleet: one node per tier.
 nodes:
