@@ -1,0 +1,6 @@
+# Short D2 trace for simulated end-to-end runs on the dev machine.
+period: 120
+phases:
+  - {t: 0,  cpu_mhz: 240}
+  - {t: 40, cpu_mhz: 80}
+  - {t: 80, cpu_mhz: 240}

@@ -1,0 +1,6 @@
+# D2 compute-throttling trace for hardware runs (section 11.8 step 6)
+period: 1800
+phases:
+  - {t: 0,    cpu_mhz: 240}
+  - {t: 600,  cpu_mhz: 80}
+  - {t: 1200, cpu_mhz: 240}
