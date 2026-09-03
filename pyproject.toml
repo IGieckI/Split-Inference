@@ -1,0 +1,33 @@
+[project]
+name = "fleetsplit"
+version = "0.1.0"
+description = "FleetSplit: contention-aware, bandit-orchestrated dynamic split inference over a heterogeneous MCU fleet"
+requires-python = ">=3.11,<3.12"
+license = { text = "MIT" }
+dependencies = [
+    "numpy",
+    "pyyaml",
+    "pydantic>=2",
+    "pillow",
+    "tensorflow>=2.19,<2.20",
+    "flatbuffers",
+    "pandas",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+# Real VWW training on the GTX 1060 workstation (COCO download via pyvww)
+train = ["pyvww"]
+# Interactive analysis; figures also regenerate headlessly via analysis/figures.py
+analysis = ["jupyterlab", "ipykernel"]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: long-running tests (slice identity, ARQ loss sweep)"]

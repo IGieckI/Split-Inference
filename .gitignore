@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Generated model artifacts (rebuild: make model-dev slice assets-dev)
+model/artifacts/
+model/assets_dev/
+
+# Generated firmware inputs
+firmware/models/generated/
+firmware/main/fleet_config.h
+
+# ESP-IDF build output
+firmware/build*/
+firmware/sdkconfig
+firmware/sdkconfig.old
+firmware/managed_components/
+firmware/dependencies.lock
+
+# Experiment data & figures
+runs/
+analysis/out/

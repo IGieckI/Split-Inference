@@ -1,0 +1,94 @@
+# FleetSplit
+
+project:
+  name: fleetsplit
+  phase: 1
+
+network:
+  ssid: FLEETSPLIT-AP
+  wpa2_psk: "fleetsplit-lab"          # change before real deployment
+  subnet: 192.168.4.0/24
+  server_ip: 192.168.4.1
+  wifi_channel: 6                     # survey first with `iw scan`
+  ports:
+    control: 5001                     # heartbeat, assign, ack, throttle, abort, result
+    data: 5002                        # tensor fragments, nack
+    timesync: 5003                    # NTP-style 4-timestamp exchange
+  fragment_payload_bytes: 1400        # one 802.11 MTU frame; verify: ping -M do -s 1372
+
+model:
+  input_size: 96
+  width_multiplier: 0.35
+  num_classes: 2                      # Visual Wake Words: person / no-person
+  jpeg_quality: 85                    # both stored assets and live capture (section 11.10-B)
+  calibration_images: 500             # PTQ representative dataset (section 11.10-C)
+  int8_accuracy_gate: 0.80            # model acceptance gate (section 11.10-C)
+  flash_image_count: 50               # stored test images per flash-input node
+  artifacts_dir: model/artifacts
+
+# Cut points.
+cuts:
+  - name: k0
+    boundary_op: null                 # full offload: JPEG on the air, full model on Pi
+    tensor_name: null
+  - name: k_shallow
+    boundary_op: null                 # PINNED AFTER M1 `make slice-list`
+    tensor_name: null
+  - name: k_deep
+    boundary_op: null                 # PINNED AFTER M1 `make slice-list`
+    tensor_name: null
+
+# Phase-1 fleet: one node per tier.
+nodes:
+  - {node_id: 11, tier: A, ip: 192.168.4.11, mac: "00:00:00:00:00:11", input: flash}
+  - {node_id: 21, tier: B, ip: 192.168.4.21, mac: "00:00:00:00:00:21", input: camera}
+  - {node_id: 31, tier: C, ip: 192.168.4.31, mac: "00:00:00:00:00:31", input: flash}
+
+tiers:
+  A: {target: esp32s3, psram: true,  arena_kb: 512, arms: [k0, k_shallow, k_deep]}
+  B: {target: esp32,   psram: true,  arena_kb: 512, arms: [k0, k_shallow, k_deep]}
+  C: {target: esp32,   psram: false, arena_kb: 120, arms: [k0, k_shallow]}  # G2 gate may shrink to [k0]
+
+policy:
+  kind: eps_greedy                    # Phase 1: the only learner (section 1.5)
+  epsilon: {start: 0.5, decay: 0.99, floor: 0.05}   # epsilon_t = max(0.05, 0.5-0.99^t), t per-node round
+  rssi_bins_dbm: [-55, -70]           # good >= -55 > mid >= -70 > bad (section 11.10-B)
+
+reward:
+  failure_penalty: -3.0
+  warmup_runs: 20                     # k0 runs per node -> T_ref = median
+
+protocol:
+  assign_ack_timeout_ms: 100
+  assign_max_retries: 3
+  nack_delay_ms: 20                   # after last received fragment, if incomplete
+  max_nack_rounds: 3
+  t_max_multiplier: 3.0               # abort at 3 x T_ref(node)
+
+registry:
+  heartbeat_period_s: 1
+  lost_after_s: 5
+
+timesync:
+  period_s: 30
+  fit_window: 10                      # linear fit over last N exchanges
+
+experiment:
+  learning_min_ok_per_node: 600
+  sweep_reqs_per_arm: 30
+  fleet_inflight_cap: 2               # Phase 1 only; removed in Phase 2 (section 11.6)
+  node_inflight_cap: 1
+  request_gap_ms: 50                  # pacing between a node's consecutive requests
+
+logging:
+  db_dir: runs
+
+# Simulation-only knobs (scripts/sim_node.py; NOT used on hardware) - Synthetic
+sim:
+  goodput_bytes_per_s: {good: 900000, mid: 250000, bad: 45000}
+  capture_ms: {camera: 45, flash: 2}
+  jpeg_encode_ms: {camera: 30, flash: 1}
+  t_edge_ms:                          # per tier, per arm, at 240 MHz
+    A: {k_shallow: 25, k_deep: 55}
+    B: {k_shallow: 60, k_deep: 140}
+    C: {k_shallow: 180}
