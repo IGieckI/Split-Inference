@@ -13,8 +13,6 @@ enum {
     PKT_ABORT = 6,
     PKT_RESULT = 7,
     PKT_THROTTLE = 8,
-    PKT_SYNC_REQ = 9,
-    PKT_SYNC_RESP = 10,
 };
 
 typedef struct __attribute__((packed)) {
@@ -39,8 +37,6 @@ typedef struct __attribute__((packed)) { uint32_t crc32; uint32_t t_capture_us; 
 typedef struct __attribute__((packed)) { uint16_t frag_total; /* bitmap[] follows */ } pkt_nack_hdr_t;
 typedef struct __attribute__((packed)) { uint8_t class_id; } pkt_result_t;
 typedef struct __attribute__((packed)) { uint16_t cpu_mhz; } pkt_throttle_t;
-typedef struct __attribute__((packed)) { uint64_t t1; } pkt_sync_req_t;
-typedef struct __attribute__((packed)) { uint64_t t1; uint64_t t2; uint64_t t3; } pkt_sync_resp_t;
 
 _Static_assert(sizeof(pkt_hdr_t) == 8, "hdr must pack to 8 B");
 _Static_assert(sizeof(pkt_heartbeat_t) == 13, "heartbeat must pack to 13 B");

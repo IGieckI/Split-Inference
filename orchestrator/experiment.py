@@ -19,7 +19,6 @@ from .reward import RewardComputer
 from .scheduler import Scheduler
 from .server import FleetServer
 from .tail import Tail
-from .timesync import TimeSync
 
 
 def git_hash() -> str:
@@ -109,11 +108,9 @@ async def amain(args):
     if args.sim_tail:
         print(f"[experiment] SIM tail emulation on: {cfg.sim.tail_extra_ms}")
     tail.start()
-    timesync = TimeSync(cfg, server.send_sync)
     scheduler = Scheduler(cfg, registry, policy, reward, reassembler, tail, server, logger)
     scheduler.collect_warmup = args.mode == "warmup"
-    server.scheduler, server.reassembler, server.timesync = scheduler, reassembler, timesync
-    timesync.start(registry)
+    server.scheduler, server.reassembler = scheduler, reassembler
 
     print(f"[experiment] run {run_id}: waiting for {len(cfg.nodes)} nodes ...")
     while len(registry.alive()) < len(cfg.nodes):
@@ -140,7 +137,6 @@ async def amain(args):
         await scheduler.run(stop, max_duration_s=args.max_duration)
     finally:
         ttask.cancel()
-        timesync.stop()
         tail.stop()
         server.close()
 

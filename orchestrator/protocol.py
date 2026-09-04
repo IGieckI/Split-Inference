@@ -13,8 +13,6 @@ NACK = 5
 ABORT = 6
 RESULT = 7
 THROTTLE = 8
-SYNC_REQ = 9
-SYNC_RESP = 10
 
 HDR = struct.Struct("<BBHI")                 # magic, type, node_id, req_id
 HEARTBEAT_S = struct.Struct("<bIbIBH")       # rssi, free_heap, temp, fw_hash, busy, boot_count
@@ -23,8 +21,6 @@ FRAG_S = struct.Struct("<HH")                # frag_idx, frag_total (payload chu
 TRAILER_S = struct.Struct("<III")            # crc32, t_capture_us, t_edge_us (end of LAST frag)
 RESULT_S = struct.Struct("<B")               # class id
 THROTTLE_S = struct.Struct("<H")             # cpu_mhz
-SYNC_REQ_S = struct.Struct("<Q")             # t1: Pi send time (us)
-SYNC_RESP_S = struct.Struct("<QQQ")          # t1 echo, t2 device rx (us), t3 device tx (us)
 
 
 @dataclass

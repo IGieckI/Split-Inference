@@ -13,7 +13,6 @@ network:
   ports:
     control: 5001                     # heartbeat, assign, ack, throttle, abort, result
     data: 5002                        # tensor fragments, nack
-    timesync: 5003                    # NTP-style 4-timestamp exchange
   fragment_payload_bytes: 1400        # one 802.11 MTU frame; verify: ping -M do -s 1372
 
 model:
@@ -68,10 +67,6 @@ protocol:
 registry:
   heartbeat_period_s: 1
   lost_after_s: 5
-
-timesync:
-  period_s: 30
-  fit_window: 10                      # linear fit over last N exchanges
 
 experiment:
   learning_min_ok_per_node: 600

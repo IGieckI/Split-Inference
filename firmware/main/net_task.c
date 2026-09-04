@@ -47,7 +47,7 @@ typedef struct {
     uint8_t action;
 } assign_t;
 
-static int s_sock_ctrl = -1, s_sock_data = -1, s_sock_sync = -1;
+static int s_sock_ctrl = -1, s_sock_data = -1;
 static struct sockaddr_in s_dst_ctrl, s_dst_data;
 static QueueHandle_t s_assign_q;
 static EventGroupHandle_t s_evt;
@@ -209,19 +209,6 @@ static void on_data(const uint8_t *buf, int n)
     }
 }
 
-static void on_sync(const uint8_t *buf, int n, struct sockaddr_in *from)
-{
-    const pkt_hdr_t *h = (const pkt_hdr_t *)buf;
-    if (h->type != PKT_SYNC_REQ || n < (int)(sizeof(*h) + sizeof(pkt_sync_req_t))) return;
-    const pkt_sync_req_t *req = (const pkt_sync_req_t *)(buf + sizeof(*h));
-    uint64_t now = (uint64_t)esp_timer_get_time();
-    uint8_t pkt[sizeof(pkt_hdr_t) + sizeof(pkt_sync_resp_t)];
-    fill_hdr(pkt, PKT_SYNC_RESP, 0);
-    pkt_sync_resp_t resp = {req->t1, now, (uint64_t)esp_timer_get_time()};
-    memcpy(pkt + sizeof(pkt_hdr_t), &resp, sizeof(resp));
-    sendto(s_sock_sync, pkt, sizeof(pkt), 0, (struct sockaddr *)from, sizeof(*from));
-}
-
 /* task */
 static int bind_udp(uint16_t port)
 {
@@ -239,7 +226,6 @@ static void net_task(void *arg)
     ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
     s_sock_ctrl = bind_udp(FLEET_PORT_CTRL);
     s_sock_data = bind_udp(FLEET_PORT_DATA);
-    s_sock_sync = bind_udp(FLEET_PORT_SYNC);
 
     int64_t next_hb = 0;
     uint8_t buf[sizeof(pkt_hdr_t) + sizeof(pkt_frag_hdr_t) + FLEET_FRAG_PAYLOAD + 64];
@@ -253,23 +239,21 @@ static void net_task(void *arg)
         FD_ZERO(&rfds);
         FD_SET(s_sock_ctrl, &rfds);
         FD_SET(s_sock_data, &rfds);
-        FD_SET(s_sock_sync, &rfds);
-        int maxfd = MAX(s_sock_ctrl, MAX(s_sock_data, s_sock_sync));
+        int maxfd = MAX(s_sock_ctrl, s_sock_data);
         struct timeval tv = {.tv_sec = 0, .tv_usec = 100 * 1000};
         if (select(maxfd + 1, &rfds, NULL, NULL, &tv) <= 0) continue;
 
         struct sockaddr_in from;
         socklen_t flen = sizeof(from);
-        for (int i = 0; i < 3; i++) {
-            int s = (int[]){s_sock_ctrl, s_sock_data, s_sock_sync}[i];
+        for (int i = 0; i < 2; i++) {
+            int s = (int[]){s_sock_ctrl, s_sock_data}[i];
             if (!FD_ISSET(s, &rfds)) continue;
             int n = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&from, &flen);
             if (n < (int)sizeof(pkt_hdr_t)) continue;
             const pkt_hdr_t *h = (const pkt_hdr_t *)buf;
             if (h->magic != FLEET_MAGIC || h->node_id != NODE_ID) continue;
             if (s == s_sock_ctrl) on_ctrl(buf, n);
-            else if (s == s_sock_data) on_data(buf, n);
-            else on_sync(buf, n, &from);
+            else on_data(buf, n);
         }
     }
 }

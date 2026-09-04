@@ -24,7 +24,6 @@ def main():
         f'#define FLEET_SERVER_IP "{cfg.network.server_ip}"',
         f"#define FLEET_PORT_CTRL {cfg.network.ports.control}",
         f"#define FLEET_PORT_DATA {cfg.network.ports.data}",
-        f"#define FLEET_PORT_SYNC {cfg.network.ports.timesync}",
         f"#define FLEET_FRAG_PAYLOAD {cfg.network.fragment_payload_bytes}",
         f"#define FLEET_HEARTBEAT_MS {cfg.registry.heartbeat_period_s * 1000}",
         f"#define FLEET_JPEG_QUALITY {cfg.model.jpeg_quality}",

@@ -1,4 +1,4 @@
-"""UDP endpoints + packet dispatch (control 5001 / data 5002 / timesync 5003)."""
+"""UDP endpoints + packet dispatch (control 5001 / data 5002)."""
 
 import asyncio
 
@@ -17,7 +17,7 @@ class _Proto(asyncio.DatagramProtocol):
 
 
 class FleetServer:
-    """Owns the three sockets"""
+    """Owns both sockets; routes packets to registry/scheduler/reassembler."""
 
     def __init__(self, cfg, registry, logger):
         self.cfg = cfg
@@ -25,15 +25,13 @@ class FleetServer:
         self.logger = logger
         self.scheduler = None   # wired after construction (mutual reference)
         self.reassembler = None
-        self.timesync = None
         self._transports = []
 
     async def start(self, bind: str):
         loop = asyncio.get_running_loop()
         ports = self.cfg.network.ports
         for port, handler in ((ports.control, self._on_control),
-                              (ports.data, self._on_data),
-                              (ports.timesync, self._on_sync)):
+                              (ports.data, self._on_data)):
             transport, _ = await loop.create_datagram_endpoint(
                 lambda h=handler: _Proto(h), local_addr=(bind, port))
             self._transports.append(transport)
@@ -51,10 +49,6 @@ class FleetServer:
         if addr:
             self._transports[1].sendto(datagram, addr)
 
-    def send_sync(self, addr, datagram: bytes):
-        if addr:
-            self._transports[2].sendto(datagram, addr)
-
     # rx
     def _on_control(self, pkt: P.Packet, addr, _size):
         if pkt.ptype == P.HEARTBEAT:
@@ -69,7 +63,3 @@ class FleetServer:
     def _on_data(self, pkt: P.Packet, addr, size):
         if pkt.ptype == P.DATA_FRAG and self.reassembler:
             self.reassembler.on_frag(pkt, addr, size)
-
-    def _on_sync(self, pkt: P.Packet, addr, _size):
-        if pkt.ptype == P.SYNC_RESP and self.timesync:
-            self.timesync.on_resp(pkt.node_id, pkt.payload)

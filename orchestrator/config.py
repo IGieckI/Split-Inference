@@ -15,7 +15,6 @@ class Strict(BaseModel):
 class Ports(Strict):
     control: int
     data: int
-    timesync: int
 
 
 class NetworkCfg(Strict):
@@ -90,11 +89,6 @@ class RegistryCfg(Strict):
     lost_after_s: int
 
 
-class TimesyncCfg(Strict):
-    period_s: int
-    fit_window: int
-
-
 class ExperimentCfg(Strict):
     learning_min_ok_per_node: int
     sweep_reqs_per_arm: int
@@ -132,7 +126,6 @@ class Config(Strict):
     reward: RewardCfg
     protocol: ProtocolCfg
     registry: RegistryCfg
-    timesync: TimesyncCfg
     experiment: ExperimentCfg
     logging: LoggingCfg
     sim: SimCfg
