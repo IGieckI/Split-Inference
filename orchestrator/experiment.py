@@ -1,4 +1,4 @@
-"""Experiment driver"""
+"""Experiment driver: loads config.yaml"""
 
 import argparse
 import asyncio
@@ -10,7 +10,6 @@ import time
 import yaml
 
 from .config import ROOT, load_config
-from . import protocol as P
 from .logger import Logger
 from .policy import Sweep, make_policy
 from .reassembly import Reassembler
@@ -27,37 +26,6 @@ def git_hash() -> str:
             ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True).strip()
     except Exception:
         return "unknown"
-
-
-def load_trace(path):
-    if path is None:
-        return {"phases": [{"t": 0, "cpu_mhz": 240}], "period": None}
-    with open(path) as f:
-        trace = yaml.safe_load(f)
-    assert trace["phases"][0]["t"] == 0, "trace must start at t=0"
-    return trace
-
-
-async def trace_task(trace, cfg, registry, server, scheduler):
-    """Broadcast THROTTLE at each phase boundary"""
-    period = trace.get("period")
-    phases = trace["phases"]
-    t0 = time.monotonic()
-    current = -1
-    while True:
-        elapsed = time.monotonic() - t0
-        if period:
-            elapsed %= period
-        idx = max(i for i, p in enumerate(phases) if p["t"] <= elapsed)
-        if idx != current:
-            current = idx
-            mhz = phases[idx]["cpu_mhz"]
-            scheduler.current_phase = idx
-            for st in registry.alive():
-                server.send_ctrl(st.ctrl_addr, P.pack(
-                    P.THROTTLE, st.node_id, 0, P.THROTTLE_S.pack(mhz)))
-            print(f"[trace] phase {idx}: cpu_mhz={mhz}")
-        await asyncio.sleep(0.1)
 
 
 def derive_b3_table(db_path) -> dict[int, str]:
@@ -96,7 +64,7 @@ async def amain(args):
 
     run_id = time.strftime("%Y%m%d-%H%M%S") + f"_{args.mode}_{policy.name}"
     logger = Logger(db_dir / f"{run_id}.db")
-    logger.start_run(run_id, policy.name, args.trace or "flat",
+    logger.start_run(run_id, policy.name,
                      json.dumps({"seed": args.seed, "config": yaml.safe_load(
                          open(ROOT / "config.yaml"))}), git_hash())
 
@@ -118,9 +86,6 @@ async def amain(args):
     await asyncio.sleep(args.settle)
     print(f"[experiment] all nodes up; starting {args.mode}")
 
-    trace = load_trace(args.trace)
-    ttask = asyncio.ensure_future(trace_task(trace, cfg, registry, server, scheduler))
-
     node_ids = [n.node_id for n in cfg.nodes]
     if args.mode == "warmup":
         stop = lambda: reward.warmup_complete(node_ids)
@@ -136,7 +101,6 @@ async def amain(args):
     try:
         await scheduler.run(stop, max_duration_s=args.max_duration)
     finally:
-        ttask.cancel()
         tail.stop()
         server.close()
 
@@ -161,7 +125,6 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", required=True, choices=["warmup", "sweep", "baseline", "learn"])
     ap.add_argument("--policy", default="eps", choices=["eps", "b0", "b2", "b3"])
-    ap.add_argument("--trace", default=None, help="traces/*.yaml (D2 phases)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--min-ok", type=int, default=None, help="OK requests per node to stop at")
     ap.add_argument("--max-duration", type=float, default=None, help="hard wall-clock cap (s)")

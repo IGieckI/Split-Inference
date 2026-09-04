@@ -4,8 +4,8 @@ import sqlite3
 
 from orchestrator.logger import REQUEST_COLS, Logger
 
-SPEC_REQUEST_COLS = [  #, verbatim order
-    "run_id", "req_id", "node_id", "tier", "phase_id", "action",
+SPEC_REQUEST_COLS = [  # log schema, order pinned here so figures can rely on it
+    "run_id", "req_id", "node_id", "tier", "action",
     "ctx_rssi_bin", "ctx_load",
     "t_assign", "t_capture_us", "t_edge_us",
     "t_first_frag", "t_last_frag", "n_frags", "n_retx",
@@ -17,14 +17,14 @@ SPEC_REQUEST_COLS = [  #, verbatim order
 def test_schema_and_roundtrip(tmp_path):
     db = tmp_path / "run.db"
     lg = Logger(db)
-    lg.start_run("r1", "eps_greedy_s0", "traces/trace_dev.yaml", "{}", "abc123")
-    lg.log_request(req_id=1, node_id=11, tier="A", phase_id=0, action="k_deep",
+    lg.start_run("r1", "eps_greedy_s0", "{}", "abc123")
+    lg.log_request(req_id=1, node_id=11, tier="A", action="k_deep",
                    ctx_rssi_bin=0, ctx_load=1, t_assign=1.0, t_capture_us=1000,
                    t_edge_us=50000, t_first_frag=1.01, t_last_frag=1.02,
                    n_frags=1, n_retx=0, t_queue_in=1.02, t_queue_out=1.03,
                    t_tail_us=4000, t_total_ms=35.5, status="OK", reward=-0.7,
                    pred_class=1, bytes_on_air=900)
-    lg.log_request(req_id=2, node_id=31, tier="C", phase_id=1, action="k0",
+    lg.log_request(req_id=2, node_id=31, tier="C", action="k0",
                    ctx_rssi_bin=2, ctx_load=0, t_assign=2.0, status="TIMEOUT",
                    reward=-3.0)
     lg.log_heartbeat(11, -55, 120000, 40, 0, 0xDEADBEEF)

@@ -23,7 +23,6 @@ class Scheduler:
         self.ok_count: dict[int, int] = {}
         self.attempts: dict[int, int] = {}
         self.next_ok_time: dict[int, float] = {}
-        self.current_phase = 0
         self.collect_warmup = False
 
     # called by server on ASSIGN_ACK
@@ -65,8 +64,7 @@ class Scheduler:
         action_idx = cfg.cut_index(arm)
         self.attempts[node_id] = self.attempts.get(node_id, 0) + 1
 
-        row = dict(req_id=req_id, node_id=node_id, tier=st.tier,
-                   phase_id=self.current_phase, action=arm,
+        row = dict(req_id=req_id, node_id=node_id, tier=st.tier, action=arm,
                    ctx_rssi_bin=ctx.rssi_bin, ctx_load=ctx.load)
         status, t_total_ms, res, tail_res = "LOST", None, None, None
         tensor_fut = self.reassembler.start(node_id, req_id)

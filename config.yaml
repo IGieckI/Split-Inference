@@ -11,7 +11,7 @@ network:
   server_ip: 192.168.4.1
   wifi_channel: 6                     # survey first with `iw scan`
   ports:
-    control: 5001                     # heartbeat, assign, ack, throttle, abort, result
+    control: 5001                     # heartbeat, assign, ack, abort, result
     data: 5002                        # tensor fragments, nack
   fragment_payload_bytes: 1400        # one 802.11 MTU frame; verify: ping -M do -s 1372
 
@@ -85,7 +85,7 @@ sim:
   capture_ms: {camera: 45, flash: 2}
   jpeg_encode_ms: {camera: 30, flash: 1}
   t_edge_ms:                          # per tier, per arm, at 240 MHz
-    A: {k_shallow: 15, k_deep: 50}    # deep: flat-optimal but phase-average-suboptimal
+    A: {k_shallow: 15, k_deep: 50}
     B: {k_shallow: 35, k_deep: 120}
     C: {k_shallow: 90}
   # Dev host runs the tail ~10x faster than a Pi 4

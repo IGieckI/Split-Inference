@@ -18,7 +18,6 @@
 #include "proto.h"
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
-#include "throttle.h"
 #include "wifi.h"
 
 #if SOC_TEMPERATURE_SENSOR_SUPPORTED
@@ -182,9 +181,6 @@ static void on_ctrl(const uint8_t *buf, int n)
         ctrl_send(PKT_ASSIGN_ACK, h->req_id, NULL, 0);
         assign_t a = {h->req_id, as->action};
         xQueueSend(s_assign_q, &a, 0);
-    } else if (h->type == PKT_THROTTLE && n >= (int)(sizeof(*h) + sizeof(pkt_throttle_t))) {
-        const pkt_throttle_t *t = (const pkt_throttle_t *)(buf + sizeof(*h));
-        throttle_set_mhz(t->cpu_mhz);
     } else if (h->type == PKT_RESULT && h->req_id == s_cur_req) {
         xEventGroupSetBits(s_evt, RESULT_BIT);
     } else if (h->type == PKT_ABORT && h->req_id == s_cur_req) {

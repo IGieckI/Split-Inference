@@ -43,7 +43,6 @@ class SimNode:
         self.loss = loss
         self.server = server
         self.rssi = cfg.sim.rssi_dbm[self.tier]
-        self.cpu_mhz = 240
         self.busy = False
         self.current_req = None
         self.serve_task = None
@@ -105,8 +104,6 @@ class SimNode:
             self.ctrl.sendto(P.pack(P.ASSIGN_ACK, nid, pkt.req_id))
             (action_idx,) = P.ASSIGN_S.unpack_from(pkt.payload)
             self.serve_task = asyncio.ensure_future(self._serve(pkt.req_id, action_idx))
-        elif pkt.ptype == P.THROTTLE:
-            (self.cpu_mhz,) = P.THROTTLE_S.unpack_from(pkt.payload)
         elif pkt.ptype == P.RESULT and pkt.req_id == self.current_req:
             self.result_evt.set()
         elif pkt.ptype == P.ABORT and pkt.req_id == self.current_req:
@@ -138,7 +135,7 @@ class SimNode:
                 await asyncio.sleep(edge_s)
                 payload = self.jpegs[idx]
             else:  # run the real head, pace by the simulated edge time
-                edge_s = self._jit(cfg.sim.t_edge_ms[self.tier][arm] * 240 / self.cpu_mhz)
+                edge_s = self._jit(cfg.sim.t_edge_ms[self.tier][arm])
                 it = self.interp[arm]
                 d_in = it.get_input_details()[0]
                 x = np.frombuffer(self.raws[idx], dtype=np.int8).reshape(d_in["shape"])

@@ -1,4 +1,4 @@
-set(srcs main.c wifi.c net_task.c input.c throttle.c ml_task.cc)
+set(srcs main.c wifi.c net_task.c input.c ml_task.cc)
 
 # Heads linked per tier (: Kconfig selects which heads get linked)
 if(CONFIG_FLEETSPLIT_TIER_C)
@@ -11,7 +11,7 @@ endif()
 idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS . ../models/generated
-    REQUIRES nvs_flash spiffs esp_wifi esp_netif esp_timer esp_pm driver esp_hw_support)
+    REQUIRES nvs_flash spiffs esp_wifi esp_netif esp_timer driver esp_hw_support)
 
 # Firmware git hash compiled into every heartbeat
 execute_process(COMMAND git rev-parse --short=8 HEAD

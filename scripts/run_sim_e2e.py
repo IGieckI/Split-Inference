@@ -60,6 +60,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--loss", type=float, default=0.01)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--base-ok", type=int, default=80)
+    ap.add_argument("--learn-ok", type=int, default=250)
     args = ap.parse_args()
 
     for req in ["model/artifacts/cuts.json", "model/assets_dev/manifest.json"]:
@@ -77,17 +79,14 @@ def main():
         cwd=ROOT, stdout=sim_log, stderr=subprocess.STDOUT)
     dbs = {}
     try:
-        # Every trace run is aligned to whole trace periods so all policies see the identical phase mix
-        period = 120  # traces/trace_dev.yaml
-        trace = ["--trace", "traces/trace_dev.yaml", "--min-ok", "0"]
         experiment(["--mode", "warmup", "--max-duration", "300"], "warmup", 400)
         dbs["sweep"] = experiment(["--mode", "sweep", "--max-duration", "600"], "sweep", 700)
         for b in ("b0", "b2", "b3"):
-            dbs[b] = experiment(["--mode", "baseline", "--policy", b] + trace
-                                + ["--max-duration", str(period)], b, 300)
+            dbs[b] = experiment(["--mode", "baseline", "--policy", b,
+                                 "--min-ok", str(args.base_ok)], b, 300)
         dbs["learn"] = experiment(
             ["--mode", "learn", "--policy", "eps", "--seed", str(args.seed),
-             "--max-duration", str(2 * period)] + trace, "learn", 600)
+             "--min-ok", str(args.learn_ok)], "learn", 600)
     finally:
         sim.terminate()
         sim.wait(10)
