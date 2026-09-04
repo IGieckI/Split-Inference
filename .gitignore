@@ -23,3 +23,6 @@ firmware/dependencies.lock
 # Experiment data & figures
 runs/
 analysis/out/
+
+# Generated Pi AP configs (rendered from config.yaml)
+scripts/pi/out/
