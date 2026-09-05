@@ -11,7 +11,6 @@ from .protocol import Heartbeat
 class NodeState:
     node_id: int
     tier: str
-    input_kind: str
     ctrl_addr: tuple | None = None
     rssi: int = -127
     free_heap: int = 0
@@ -28,10 +27,7 @@ class Registry:
     def __init__(self, cfg: Config, now_fn=time.monotonic):
         self.cfg = cfg
         self.now = now_fn
-        self.nodes = {
-            n.node_id: NodeState(n.node_id, n.tier, n.input)
-            for n in cfg.nodes
-        }
+        self.nodes = {n.node_id: NodeState(n.node_id, n.tier) for n in cfg.nodes}
 
     def update_heartbeat(self, node_id: int, addr: tuple, hb: Heartbeat) -> list[str]:
         """Returns human-readable events: node_up / boot_count_changed."""

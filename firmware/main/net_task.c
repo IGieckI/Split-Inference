@@ -124,7 +124,7 @@ static void ml_pipeline_task(void *arg)
         bool ok;
         if (a.action == FLEET_CUT_K0) {
             size_t len = BLOB_CAP - sizeof(pkt_trailer_t);
-            ok = input_get_jpeg(a.req_id, s_blob, &len, &cap_us, &edge_us) == ESP_OK;
+            ok = input_get_jpeg(a.req_id, s_blob, &len, &cap_us) == ESP_OK;
             body_len = len;
         } else {
             ok = input_get_raw(a.req_id, s_raw, &cap_us) == ESP_OK;

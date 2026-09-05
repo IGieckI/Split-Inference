@@ -19,7 +19,7 @@ model:
   input_size: 96
   width_multiplier: 0.35
   num_classes: 2                      # Visual Wake Words: person / no-person
-  jpeg_quality: 85                    # both stored assets and live capture (section 11.10-B)
+  jpeg_quality: 85                    # stored flash assets
   calibration_images: 500             # PTQ representative dataset (section 11.10-C)
   int8_accuracy_gate: 0.80            # model acceptance gate (section 11.10-C)
   flash_image_count: 50               # stored test images per flash-input node
@@ -37,11 +37,11 @@ cuts:
     boundary_op: 25                   # 6x6x24 = 864 B on air (< JPEG)
     tensor_name: "functional_1/block_6_project_BN_1/batchnorm/add_1;functional_1/block_6_project_1/convolution;functional_1/block_6_project_BN_1/batchnorm/sub"
 
-# Phase-1 fleet: one node per tier.
+# The fleet: one board per hardware tier.
 nodes:
-  - {node_id: 11, tier: A, ip: 192.168.4.11, mac: "00:00:00:00:00:11", input: flash}
-  - {node_id: 21, tier: B, ip: 192.168.4.21, mac: "00:00:00:00:00:21", input: camera}
-  - {node_id: 31, tier: C, ip: 192.168.4.31, mac: "00:00:00:00:00:31", input: flash}
+  - {node_id: 11, tier: A, ip: 192.168.4.11, mac: "00:00:00:00:00:11"}
+  - {node_id: 21, tier: B, ip: 192.168.4.21, mac: "00:00:00:00:00:21"}
+  - {node_id: 31, tier: C, ip: 192.168.4.31, mac: "00:00:00:00:00:31"}
 
 tiers:
   A: {target: esp32s3, psram: true,  arena_kb: 512, arms: [k0, k_shallow, k_deep]}
@@ -82,8 +82,8 @@ logging:
 sim:
   goodput_bytes_per_s: {good: 900000, mid: 250000, bad: 45000}
   rssi_dbm: {A: -62, B: -50, C: -75}  # per-tier link profile (mid/good/bad bins)
-  capture_ms: {camera: 45, flash: 2}
-  jpeg_encode_ms: {camera: 30, flash: 1}
+  capture_ms: 2                       # SPIFFS read of the raw int8 tensor
+  jpeg_read_ms: 1                     # SPIFFS read of the stored JPEG
   t_edge_ms:                          # per tier, per arm, at 240 MHz
     A: {k_shallow: 15, k_deep: 50}
     B: {k_shallow: 35, k_deep: 120}

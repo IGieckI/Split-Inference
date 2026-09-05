@@ -23,12 +23,10 @@ if(NOT FLEET_GIT_HASH)
 endif()
 target_compile_definitions(${COMPONENT_LIB} PRIVATE FLEET_FW_HASH=0x${FLEET_GIT_HASH})
 
-# Flash-input tiers carry the 50 test images in a SPIFFS partition.
+# Every node carries the same 50 test images in a SPIFFS partition.
 # Real VWW assets (model/assets) win over dev synthetic ones when present.
 set(ASSETS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../model/assets_dev)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../../model/assets/manifest.json)
     set(ASSETS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../model/assets)
 endif()
-if(NOT CONFIG_FLEETSPLIT_TIER_B)
-    spiffs_create_partition_image(assets ${ASSETS_DIR} FLASH_IN_PROJECT)
-endif()
+spiffs_create_partition_image(assets ${ASSETS_DIR} FLASH_IN_PROJECT)

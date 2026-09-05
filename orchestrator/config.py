@@ -49,7 +49,6 @@ class NodeCfg(Strict):
     tier: str
     ip: str
     mac: str
-    input: str  # flash | camera
 
 
 class TierCfg(Strict):
@@ -104,8 +103,8 @@ class LoggingCfg(Strict):
 class SimCfg(Strict):
     goodput_bytes_per_s: dict[str, int]
     rssi_dbm: dict[str, int]
-    capture_ms: dict[str, int]
-    jpeg_encode_ms: dict[str, int]
+    capture_ms: int
+    jpeg_read_ms: int
     t_edge_ms: dict[str, dict[str, int]]
     tail_extra_ms: dict[str, float]
 

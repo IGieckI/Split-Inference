@@ -7,7 +7,7 @@ menu "FleetSplit"
         config FLEETSPLIT_TIER_A
             bool "Tier A: ESP32-S3, flash inputs, heads {k_shallow, k_deep}"
         config FLEETSPLIT_TIER_B
-            bool "Tier B: ESP32-CAM, live OV2640, heads {k_shallow, k_deep}"
+            bool "Tier B: ESP32 + PSRAM, flash inputs, heads {k_shallow, k_deep}"
         config FLEETSPLIT_TIER_C
             bool "Tier C: plain ESP32, flash inputs, head {k_shallow}"
     endchoice
@@ -21,7 +21,7 @@ menu "FleetSplit"
         default 512
         help
             Tiers A/B allocate this from PSRAM at boot; tier C from internal
-            SRAM (static). Actual usage is printed at boot (gate G1/G2) and
-            belongs in cuts.json arena_bytes.
+            SRAM (static). Actual usage is printed at boot and belongs in
+            cuts.json arena_bytes.
 
 endmenu

@@ -128,10 +128,10 @@ class SimNode:
         try:
             arm = cfg.cuts[action_idx].name
             idx = req_id % len(self.jpegs)
-            cap_s = self._jit(cfg.sim.capture_ms[self.node.input])
+            cap_s = self._jit(cfg.sim.capture_ms)
             await asyncio.sleep(cap_s)
             if action_idx == 0:  # k0: JPEG on the air
-                edge_s = self._jit(cfg.sim.jpeg_encode_ms[self.node.input])
+                edge_s = self._jit(cfg.sim.jpeg_read_ms)
                 await asyncio.sleep(edge_s)
                 payload = self.jpegs[idx]
             else:  # run the real head, pace by the simulated edge time
