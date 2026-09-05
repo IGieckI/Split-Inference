@@ -1,10 +1,10 @@
-# FleetSplit build/test glue (spec §11.1). Python side runs through uv.
+# FleetSplit build/test glue. Python side runs through uv.
 
 UV := uv run
 IDF_ENV := scripts/idf_env.sh
 
 .PHONY: env model-dev slice-list slice assets-dev header test test-slow arq-test \
-        figures fw-A fw-B fw-C clean
+        preflight figures fw-A fw-B fw-C clean
 
 env:                ## create venv + install pinned deps
 	uv sync
@@ -30,11 +30,14 @@ test:               ## fast unit tests
 test-slow:          ## slice identity test (200 imgs, bit-exact) + ARQ loss sweep
 	$(UV) pytest -q -m slow
 
-arq-test:           ## §11.10-D: 200 tensors per loss level {0,2,5,10,40}% against live orchestrator
+arq-test:           ## ARQ acceptance: 200 tensors per loss level {0,2,5,10,40}%
 	$(UV) python scripts/test_arq_loss.py
 
+preflight:          ## full measurement sequence against simulated nodes + verification
+	$(UV) python scripts/preflight.py
 
-figures:            ## regenerate all figures from the newest run DB
+
+figures:            ## regenerate all figures + results.md from the newest run DBs
 	$(UV) python analysis/figures.py
 
 fw-A fw-B fw-C:     ## compile firmware per tier (uses ~/.espressif v5.5.3)
