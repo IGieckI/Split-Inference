@@ -9,6 +9,10 @@ class Policy:
     def select(self, node_id: int) -> str:
         raise NotImplementedError
 
+    def done(self, node_id: int) -> bool:
+        """True once this node needs no further requests."""
+        return False
+
 
 class FixedCut(Policy):
     """One fixed cut per node - the four policies under comparison."""

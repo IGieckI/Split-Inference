@@ -42,6 +42,8 @@ class Scheduler:
                     break
                 if now < self.next_ok_time.get(st.node_id, 0.0):
                     continue
+                if self.policy.done(st.node_id):
+                    continue  # this node has all the samples it needs
                 st.in_flight += 1
                 task = asyncio.create_task(self._handle(st))
                 tasks.add(task)

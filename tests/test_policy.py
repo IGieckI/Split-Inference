@@ -31,6 +31,11 @@ def test_best_policy_requires_a_table():
         make_policy("best", CFG)
 
 
+def test_fixed_cut_policies_never_report_done():
+    # Only the sweep bounds itself
+    assert not make_policy("k0", CFG).done(11)
+
+
 def test_sweep_runs_equal_blocks_of_every_feasible_cut():
     p = Sweep(CFG)
     n = CFG.experiment.sweep_reqs_per_cut
@@ -38,3 +43,12 @@ def test_sweep_runs_equal_blocks_of_every_feasible_cut():
     seq = [p.select(31) for _ in range(n * len(cuts))]
     assert seq[:n] == [cuts[0]] * n and seq[n:] == [cuts[1]] * n
     assert p.done(31) and not p.done(11)
+
+
+def test_sweep_stops_dispatching_once_a_node_is_finished():
+    # A fast node must not keep drawing requests while a slow one catches up
+    p = Sweep(CFG)
+    n = CFG.experiment.sweep_reqs_per_cut
+    for _ in range(n * len(CFG.cuts_for_tier("C"))):
+        p.select(31)
+    assert p.done(31)
