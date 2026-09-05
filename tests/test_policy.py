@@ -1,71 +1,40 @@
-"""epsilon-greedy bandit math + baseline policies."""
+"""Split-point policies: per-tier feasibility clamping and sweep blocking."""
+
+import pytest
 
 from orchestrator.config import load_config
-from orchestrator.policy import Context, EpsGreedy, Sweep, make_policy
+from orchestrator.policy import Sweep, clamp, make_policy
 
 CFG = load_config()
-CTX_A = Context(tier="A", rssi_bin=0)
 
 
-def test_epsilon_schedule():
-    p = EpsGreedy(CFG)
-    eps = CFG.policy.epsilon
-    assert p._eps(11) == eps.start  # t=0
-    p.t[11] = 100
-    assert p._eps(11) == max(eps.floor, eps.start * eps.decay**100)
-    p.t[11] = 100000
-    assert p._eps(11) == eps.floor
+def test_fixed_cut_policies_per_node():
+    assert make_policy("k0", CFG).select(11) == "k0"
+    assert make_policy("k_shallow", CFG).select(11) == "k_shallow"
+    assert make_policy("k_deep", CFG).select(11) == "k_deep"
 
 
-def test_untried_arms_first():
-    p = EpsGreedy(CFG, seed=1)
-    arms = set(CFG.arms_for_tier("A"))
-    picked = set()
-    for _ in range(3):
-        a = p.select(11, CTX_A)
-        picked.add(a)
-        p.update(11, CTX_A, a, -1.0)
-    assert picked == arms  # all 3 arms tried before any repeat
+def test_infeasible_cut_clamps_to_deepest_the_tier_can_run():
+    # Tier C (node 31) has no k_deep head
+    assert clamp(CFG, "C", "k_deep") == "k_shallow"
+    assert clamp(CFG, "A", "k_deep") == "k_deep"
+    assert make_policy("k_deep", CFG).select(31) == "k_shallow"
 
 
-def test_incremental_mean():
-    p = EpsGreedy(CFG)
-    p.update(11, CTX_A, "k0", -1.0)
-    p.update(11, CTX_A, "k0", -2.0)
-    assert p.q[CTX_A.cell()]["k0"] == (-1.5, 2)
+def test_best_policy_replays_the_sweep_table():
+    p = make_policy("best", CFG, best_table={11: "k_deep", 21: "k0", 31: "k0"})
+    assert (p.select(11), p.select(21), p.select(31)) == ("k_deep", "k0", "k0")
 
 
-def test_pure_greedy_exploits_best_arm():
-    cfg = CFG.model_copy(deep=True)
-    cfg.policy.epsilon.start = 0.0
-    cfg.policy.epsilon.floor = 0.0
-    p = EpsGreedy(cfg)
-    for arm, r in (("k0", -2.0), ("k_shallow", -1.0), ("k_deep", -3.0)):
-        p.update(11, CTX_A, arm, r)
-    assert all(p.select(11, CTX_A) == "k_shallow" for _ in range(10))
+def test_best_policy_requires_a_table():
+    with pytest.raises(AssertionError):
+        make_policy("best", CFG)
 
 
-def test_context_cells_are_independent():
-    p = EpsGreedy(CFG)
-    ctx_bad = Context(tier="A", rssi_bin=2)
-    p.update(11, CTX_A, "k0", -1.0)
-    assert CTX_A.cell() in p.q and ctx_bad.cell() not in p.q
-
-
-def test_fixed_policies():
-    b0 = make_policy("b0", CFG)
-    b2 = make_policy("b2", CFG)
-    assert b0.select(31, CTX_A) == "k0"
-    assert b2.select(11, CTX_A) == "k_deep"      # tier A deepest
-    assert b2.select(31, CTX_A) == "k_shallow"   # tier C deepest feasible
-    b3 = make_policy("b3", CFG, b3_table={11: "k_deep", 21: "k0", 31: "k0"})
-    assert b3.select(21, CTX_A) == "k0"
-
-
-def test_sweep_blocks_and_done():
+def test_sweep_runs_equal_blocks_of_every_feasible_cut():
     p = Sweep(CFG)
-    n = CFG.experiment.sweep_reqs_per_arm
-    arms = CFG.arms_for_tier("C")  # node 31: 2 arms
-    seq = [p.select(31, CTX_A) for _ in range(n * len(arms))]
-    assert seq[:n] == [arms[0]] * n and seq[n:] == [arms[1]] * n
+    n = CFG.experiment.sweep_reqs_per_cut
+    cuts = CFG.cuts_for_tier("C")  # node 31: 2 feasible cuts
+    seq = [p.select(31) for _ in range(n * len(cuts))]
+    assert seq[:n] == [cuts[0]] * n and seq[n:] == [cuts[1]] * n
     assert p.done(31) and not p.done(11)

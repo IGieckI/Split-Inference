@@ -43,35 +43,27 @@ nodes:
   - {node_id: 21, tier: B, ip: 192.168.4.21, mac: "00:00:00:00:00:21"}
   - {node_id: 31, tier: C, ip: 192.168.4.31, mac: "00:00:00:00:00:31"}
 
+# Feasible cuts per tier
 tiers:
-  A: {target: esp32s3, psram: true,  arena_kb: 512, arms: [k0, k_shallow, k_deep]}
-  B: {target: esp32,   psram: true,  arena_kb: 512, arms: [k0, k_shallow, k_deep]}
-  C: {target: esp32,   psram: false, arena_kb: 120, arms: [k0, k_shallow]}  # G2 gate may shrink to [k0]
-
-policy:
-  kind: eps_greedy                    # Phase 1: the only learner (section 1.5)
-  epsilon: {start: 0.5, decay: 0.99, floor: 0.05}   # epsilon_t = max(0.05, 0.5-0.99^t), t per-node round
-  rssi_bins_dbm: [-55, -70]           # good >= -55 > mid >= -70 > bad (section 11.10-B)
-
-reward:
-  failure_penalty: -3.0
-  warmup_runs: 20                     # k0 runs per node -> T_ref = median
+  A: {target: esp32s3, psram: true,  arena_kb: 512, cuts: [k0, k_shallow, k_deep]}
+  B: {target: esp32,   psram: true,  arena_kb: 512, cuts: [k0, k_shallow, k_deep]}
+  C: {target: esp32,   psram: false, arena_kb: 120, cuts: [k0, k_shallow]}
 
 protocol:
   assign_ack_timeout_ms: 100
   assign_max_retries: 3
   nack_delay_ms: 20                   # after last received fragment, if incomplete
   max_nack_rounds: 3
-  t_max_multiplier: 3.0               # abort at 3 x T_ref(node)
+  t_max_ms: 3000                      # abort a request that has not completed by then
 
 registry:
   heartbeat_period_s: 1
   lost_after_s: 5
 
 experiment:
-  learning_min_ok_per_node: 600
-  sweep_reqs_per_arm: 30
-  fleet_inflight_cap: 2               # Phase 1 only; removed in Phase 2 (section 11.6)
+  sweep_reqs_per_cut: 200             # per node, per cut - sets the p95 resolution
+  min_ok_per_node: 200                # OK requests per node in a single-policy run
+  fleet_inflight_cap: 2               # keeps the server tail uncontended
   node_inflight_cap: 1
   request_gap_ms: 50                  # pacing between a node's consecutive requests
 

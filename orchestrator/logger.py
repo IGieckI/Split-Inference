@@ -1,4 +1,4 @@
-"""SQLite logging"""
+"""SQLite logging."""
 
 import sqlite3
 import time
@@ -10,21 +10,21 @@ CREATE TABLE IF NOT EXISTS runs(
   config_json TEXT, git_hash TEXT);
 CREATE TABLE IF NOT EXISTS requests(
   run_id TEXT, req_id INTEGER, node_id INTEGER, tier TEXT,
-  action TEXT, ctx_rssi_bin INTEGER, ctx_load INTEGER,
+  action TEXT, rssi_dbm INTEGER,
   t_assign REAL, t_capture_us INTEGER, t_edge_us INTEGER,
   t_first_frag REAL, t_last_frag REAL, n_frags INTEGER, n_retx INTEGER,
   t_queue_in REAL, t_queue_out REAL, t_tail_us INTEGER,
-  t_total_ms REAL, status TEXT, reward REAL, pred_class INTEGER,
+  t_total_ms REAL, status TEXT, pred_class INTEGER,
   bytes_on_air INTEGER);
 CREATE TABLE IF NOT EXISTS heartbeats(
   run_id TEXT, ts REAL, node_id INTEGER, rssi INTEGER, free_heap INTEGER,
   temp INTEGER, boot_count INTEGER, fw_hash TEXT);
 """
 
-REQUEST_COLS = ("req_id node_id tier action ctx_rssi_bin ctx_load "
+REQUEST_COLS = ("req_id node_id tier action rssi_dbm "
                 "t_assign t_capture_us t_edge_us t_first_frag t_last_frag "
                 "n_frags n_retx t_queue_in t_queue_out t_tail_us t_total_ms "
-                "status reward pred_class bytes_on_air").split()
+                "status pred_class bytes_on_air").split()
 
 
 class Logger:

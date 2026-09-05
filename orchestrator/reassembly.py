@@ -1,4 +1,4 @@
-"""Per-request fragment reassembly with NACK-based selective repeat"""
+"""Per-request fragment reassembly with NACK-based selective repeat."""
 
 import asyncio
 import time

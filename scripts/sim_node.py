@@ -73,7 +73,7 @@ class SimNode:
         from tensorflow.lite.python.interpreter import Interpreter
 
         art = ROOT / self.cfg.model.artifacts_dir
-        for arm in self.cfg.arms_for_tier(self.tier):
+        for arm in self.cfg.cuts_for_tier(self.tier):
             if arm == self.cfg.cuts[0].name:
                 continue
             it = Interpreter(model_path=str(art / f"head_{arm}.tflite"))
@@ -85,8 +85,9 @@ class SimNode:
         return ms * self.rng.uniform(1 - JITTER, 1 + JITTER) / 1000
 
     def _goodput(self) -> float:
+        """Link profile picked from RSSI the way a real radio rate-adapts."""
         gp = self.cfg.sim.goodput_bytes_per_s
-        return gp[("good", "mid", "bad")[self.cfg.rssi_bin(self.rssi)]]
+        return gp["good" if self.rssi >= -55 else "mid" if self.rssi >= -70 else "bad"]
 
     async def _send_frag(self, datagram: bytes):
         await asyncio.sleep(len(datagram) / self._goodput())  # airtime (spent even if dropped)

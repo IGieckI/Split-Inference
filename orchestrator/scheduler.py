@@ -4,16 +4,14 @@ import asyncio
 import time
 
 from . import protocol as P
-from .policy import Context
 from .reassembly import ReassemblyError
 
 
 class Scheduler:
-    def __init__(self, cfg, registry, policy, reward, reassembler, tail, server, logger):
+    def __init__(self, cfg, registry, policy, reassembler, tail, server, logger):
         self.cfg = cfg
         self.registry = registry
         self.policy = policy
-        self.reward = reward
         self.reassembler = reassembler
         self.tail = tail
         self.server = server
@@ -23,7 +21,6 @@ class Scheduler:
         self.ok_count: dict[int, int] = {}
         self.attempts: dict[int, int] = {}
         self.next_ok_time: dict[int, float] = {}
-        self.collect_warmup = False
 
     # called by server on ASSIGN_ACK
     def on_assign_ack(self, node_id: int, req_id: int):
@@ -58,14 +55,12 @@ class Scheduler:
         self.req_counter += 1
         req_id = self.req_counter
         node_id = st.node_id
-        ctx = Context(tier=st.tier, rssi_bin=cfg.rssi_bin(st.rssi),
-                      load=self.registry.fleet_in_flight())
-        arm = self.policy.select(node_id, ctx)
+        arm = self.policy.select(node_id)
         action_idx = cfg.cut_index(arm)
         self.attempts[node_id] = self.attempts.get(node_id, 0) + 1
 
         row = dict(req_id=req_id, node_id=node_id, tier=st.tier, action=arm,
-                   ctx_rssi_bin=ctx.rssi_bin, ctx_load=ctx.load)
+                   rssi_dbm=st.rssi)
         status, t_total_ms, res, tail_res = "LOST", None, None, None
         tensor_fut = self.reassembler.start(node_id, req_id)
         t_assign = time.monotonic()
@@ -74,7 +69,7 @@ class Scheduler:
             if await self._assign(st, req_id, action_idx):
                 try:
                     res = await asyncio.wait_for(
-                        tensor_fut, self.reward.t_max_ms(node_id) / 1000)
+                        tensor_fut, cfg.protocol.t_max_ms / 1000)
                     tail_res = await self.tail.infer(arm, res.data)
                     t_total_ms = (tail_res.t_done - t_assign) * 1000
                     status = "OK"
@@ -99,14 +94,6 @@ class Scheduler:
             self.next_ok_time[node_id] = time.monotonic() + cfg.experiment.request_gap_ms / 1000
 
         ok = status == "OK"
-        if not ok:
-            r = self.cfg.reward.failure_penalty
-        elif self.collect_warmup:
-            self.reward.observe_warmup(node_id, t_total_ms)
-            r = 0.0  # T_ref not defined yet; warm-up rewards are not learning signal
-        else:
-            r = self.reward.reward(node_id, t_total_ms, True)
-        self.policy.update(node_id, ctx, arm, r)
         if ok:
             self.ok_count[node_id] = self.ok_count.get(node_id, 0) + 1
         if res is not None:
@@ -117,7 +104,7 @@ class Scheduler:
         if tail_res is not None:
             row.update(t_queue_in=tail_res.t_queue_in, t_queue_out=tail_res.t_queue_out,
                        t_tail_us=tail_res.t_tail_us, pred_class=tail_res.pred_class)
-        row.update(t_total_ms=t_total_ms, status=status, reward=r)
+        row.update(t_total_ms=t_total_ms, status=status)
         self.logger.log_request(**row)
 
     async def _assign(self, st, req_id: int, action_idx: int) -> bool:

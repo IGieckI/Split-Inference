@@ -4,7 +4,7 @@ UV := uv run
 IDF_ENV := scripts/idf_env.sh
 
 .PHONY: env model-dev slice-list slice assets-dev header test test-slow arq-test \
-        sim-e2e figures fw-A fw-B fw-C clean
+        figures fw-A fw-B fw-C clean
 
 env:                ## create venv + install pinned deps
 	uv sync
@@ -33,8 +33,6 @@ test-slow:          ## slice identity test (200 imgs, bit-exact) + ARQ loss swee
 arq-test:           ## §11.10-D: 200 tensors per loss level {0,2,5,10,40}% against live orchestrator
 	$(UV) python scripts/test_arq_loss.py
 
-sim-e2e:            ## full Phase-1 experiment sequence against simulated nodes
-	$(UV) python scripts/run_sim_e2e.py
 
 figures:            ## regenerate all figures from the newest run DB
 	$(UV) python analysis/figures.py

@@ -55,24 +55,7 @@ class TierCfg(Strict):
     target: str
     psram: bool
     arena_kb: int
-    arms: list[str]
-
-
-class EpsilonCfg(Strict):
-    start: float
-    decay: float
-    floor: float
-
-
-class PolicyCfg(Strict):
-    kind: str
-    epsilon: EpsilonCfg
-    rssi_bins_dbm: list[int]
-
-
-class RewardCfg(Strict):
-    failure_penalty: float
-    warmup_runs: int
+    cuts: list[str]
 
 
 class ProtocolCfg(Strict):
@@ -80,7 +63,7 @@ class ProtocolCfg(Strict):
     assign_max_retries: int
     nack_delay_ms: int
     max_nack_rounds: int
-    t_max_multiplier: float
+    t_max_ms: int
 
 
 class RegistryCfg(Strict):
@@ -89,8 +72,8 @@ class RegistryCfg(Strict):
 
 
 class ExperimentCfg(Strict):
-    learning_min_ok_per_node: int
-    sweep_reqs_per_arm: int
+    sweep_reqs_per_cut: int
+    min_ok_per_node: int
     fleet_inflight_cap: int
     node_inflight_cap: int
     request_gap_ms: int
@@ -121,8 +104,6 @@ class Config(Strict):
     cuts: list[CutCfg]
     nodes: list[NodeCfg]
     tiers: dict[str, TierCfg]
-    policy: PolicyCfg
-    reward: RewardCfg
     protocol: ProtocolCfg
     registry: RegistryCfg
     experiment: ExperimentCfg
@@ -139,17 +120,8 @@ class Config(Strict):
     def cut_index(self, name: str) -> int:
         return self.cut_names().index(name)
 
-    def arms_for_tier(self, tier: str) -> list[str]:
-        return list(self.tiers[tier].arms)
-
-    def rssi_bin(self, rssi_dbm: int) -> int:
-        """0 = good (>= -55), 1 = mid (>= -70), 2 = bad."""
-        good, mid = self.policy.rssi_bins_dbm
-        if rssi_dbm >= good:
-            return 0
-        if rssi_dbm >= mid:
-            return 1
-        return 2
+    def cuts_for_tier(self, tier: str) -> list[str]:
+        return list(self.tiers[tier].cuts)
 
 
 def load_config(path: pathlib.Path | None = None) -> Config:

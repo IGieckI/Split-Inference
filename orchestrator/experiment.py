@@ -1,4 +1,4 @@
-"""Experiment driver: loads config.yaml"""
+"""Experiment driver: run one split-point policy against the fleet and write one SQLite run DB."""
 
 import argparse
 import asyncio
@@ -14,7 +14,6 @@ from .logger import Logger
 from .policy import Sweep, make_policy
 from .reassembly import Reassembler
 from .registry import Registry
-from .reward import RewardComputer
 from .scheduler import Scheduler
 from .server import FleetServer
 from .tail import Tail
@@ -28,8 +27,8 @@ def git_hash() -> str:
         return "unknown"
 
 
-def derive_b3_table(db_path) -> dict[int, str]:
-    """Best static arm per node = argmin of mean OK latency in the sweep DB."""
+def derive_best_table(db_path) -> dict[int, str]:
+    """Best static cut per node = argmin of mean OK latency in the sweep DB."""
     conn = sqlite3.connect(db_path)
     rows = conn.execute(
         "SELECT node_id, action, AVG(t_total_ms) FROM requests "
@@ -46,27 +45,18 @@ async def amain(args):
     cfg = load_config()
     db_dir = ROOT / cfg.logging.db_dir
     db_dir.mkdir(exist_ok=True)
-    reward = RewardComputer(cfg, db_dir / "t_ref.json")
 
-    if args.mode == "warmup":
-        policy = make_policy("b0", cfg)
-    elif args.mode == "sweep":
-        policy = make_policy("sweep", cfg)
-    elif args.mode == "baseline":
-        b3 = None
-        if args.policy == "b3":
-            b3 = {int(k): v for k, v in json.loads((db_dir / "b3_table.json").read_text()).items()}
-        policy = make_policy(args.policy, cfg, b3_table=b3)
-    elif args.mode == "learn":
-        policy = make_policy(args.policy, cfg, seed=args.seed)
-    if args.mode != "warmup":
-        assert reward.t_ref, "no t_ref.json - run --mode warmup first (section 11.8 step 4)"
+    best = None
+    if args.policy == "best":
+        best_path = db_dir / "best_table.json"
+        assert best_path.exists(), f"{best_path} missing - run `--policy sweep` first"
+        best = {int(k): v for k, v in json.loads(best_path.read_text()).items()}
+    policy = make_policy(args.policy, cfg, best_table=best)
 
-    run_id = time.strftime("%Y%m%d-%H%M%S") + f"_{args.mode}_{policy.name}"
+    run_id = time.strftime("%Y%m%d-%H%M%S") + f"_{policy.name}"
     logger = Logger(db_dir / f"{run_id}.db")
     logger.start_run(run_id, policy.name,
-                     json.dumps({"seed": args.seed, "config": yaml.safe_load(
-                         open(ROOT / "config.yaml"))}), git_hash())
+                     json.dumps(yaml.safe_load(open(ROOT / "config.yaml"))), git_hash())
 
     registry = Registry(cfg)
     server = FleetServer(cfg, registry, logger)
@@ -76,26 +66,20 @@ async def amain(args):
     if args.sim_tail:
         print(f"[experiment] SIM tail emulation on: {cfg.sim.tail_extra_ms}")
     tail.start()
-    scheduler = Scheduler(cfg, registry, policy, reward, reassembler, tail, server, logger)
-    scheduler.collect_warmup = args.mode == "warmup"
+    scheduler = Scheduler(cfg, registry, policy, reassembler, tail, server, logger)
     server.scheduler, server.reassembler = scheduler, reassembler
 
     print(f"[experiment] run {run_id}: waiting for {len(cfg.nodes)} nodes ...")
     while len(registry.alive()) < len(cfg.nodes):
         await asyncio.sleep(0.2)
     await asyncio.sleep(args.settle)
-    print(f"[experiment] all nodes up; starting {args.mode}")
+    print(f"[experiment] all nodes up; policy {policy.name}")
 
     node_ids = [n.node_id for n in cfg.nodes]
-    if args.mode == "warmup":
-        stop = lambda: reward.warmup_complete(node_ids)
-    elif args.mode == "sweep":
+    if isinstance(policy, Sweep):
         stop = lambda: all(policy.done(n) for n in node_ids)
-    elif args.min_ok == 0:
-        stop = lambda: False  # duration-driven run (trace-aligned; --max-duration)
-        assert args.max_duration, "--min-ok 0 requires --max-duration"
     else:
-        target = args.min_ok or cfg.experiment.learning_min_ok_per_node
+        target = args.min_ok or cfg.experiment.min_ok_per_node
         stop = lambda: all(scheduler.ok_count.get(n, 0) >= target for n in node_ids)
 
     try:
@@ -103,17 +87,12 @@ async def amain(args):
     finally:
         tail.stop()
         server.close()
+    logger.close()
 
-    if args.mode == "warmup":
-        reward.finalize_warmup()
-        print(f"[experiment] T_ref written: {reward.t_ref}")
-    if args.mode == "sweep":
-        logger.close()
-        table = derive_b3_table(db_dir / f"{run_id}.db")
-        (db_dir / "b3_table.json").write_text(json.dumps(table, indent=2))
-        print(f"[experiment] B3 best-static table: {table}")
-    else:
-        logger.close()
+    if isinstance(policy, Sweep):
+        table = derive_best_table(db_dir / f"{run_id}.db")
+        (db_dir / "best_table.json").write_text(json.dumps(table, indent=2))
+        print(f"[experiment] best static cut per node: {table}")
 
     ok = sum(scheduler.ok_count.values())
     att = sum(scheduler.attempts.values())
@@ -123,9 +102,8 @@ async def amain(args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", required=True, choices=["warmup", "sweep", "baseline", "learn"])
-    ap.add_argument("--policy", default="eps", choices=["eps", "b0", "b2", "b3"])
-    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--policy", required=True,
+                    choices=["sweep", "k0", "k_shallow", "k_deep", "best"])
     ap.add_argument("--min-ok", type=int, default=None, help="OK requests per node to stop at")
     ap.add_argument("--max-duration", type=float, default=None, help="hard wall-clock cap (s)")
     ap.add_argument("--bind", default="0.0.0.0")

@@ -55,11 +55,3 @@ def test_unknown_node_ignored():
     events = reg.update_heartbeat(99, ADDR, hb())
     assert any("unknown" in e for e in events)
     assert 99 not in reg.nodes
-
-
-def test_rssi_bins():
-    assert CFG.rssi_bin(-50) == 0  # good
-    assert CFG.rssi_bin(-55) == 0
-    assert CFG.rssi_bin(-60) == 1  # mid
-    assert CFG.rssi_bin(-70) == 1
-    assert CFG.rssi_bin(-80) == 2  # bad
