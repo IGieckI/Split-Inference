@@ -21,6 +21,13 @@ class Scheduler:
         self.ok_count: dict[int, int] = {}
         self.attempts: dict[int, int] = {}
         self.next_ok_time: dict[int, float] = {}
+        self.target_ok: int | None = None   # per-node OK quota, set by experiment.py
+
+    def _satisfied(self, node_id: int) -> bool:
+        """Should this node be skipped this tick?"""
+        if not self.policy.wants(node_id):
+            return True
+        return self.target_ok is not None and self.ok_count.get(node_id, 0) >= self.target_ok
 
     # called by server on ASSIGN_ACK
     def on_assign_ack(self, node_id: int, req_id: int):
@@ -38,11 +45,9 @@ class Scheduler:
                 break
             now = time.monotonic()
             for st in self.registry.ready():
-                if self.registry.fleet_in_flight() >= self.cfg.experiment.fleet_inflight_cap:
-                    break
                 if now < self.next_ok_time.get(st.node_id, 0.0):
                     continue
-                if self.policy.done(st.node_id):
+                if self._satisfied(st.node_id):
                     continue  # this node has all the samples it needs
                 st.in_flight += 1
                 task = asyncio.create_task(self._handle(st))

@@ -60,11 +60,11 @@ registry:
   heartbeat_period_s: 1
   lost_after_s: 5
 
+# There is deliberately no fleet-wide in-flight cap.
 experiment:
   sweep_reqs_per_cut: 200             # per node, per cut - sets the p95 resolution
   min_ok_per_node: 200                # OK requests per node in a single-policy run
-  fleet_inflight_cap: 2               # keeps the server tail uncontended
-  node_inflight_cap: 1
+  node_inflight_cap: 1                # the ONLY concurrency limit - see below
   request_gap_ms: 50                  # pacing between a node's consecutive requests
 
 logging:

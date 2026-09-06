@@ -48,7 +48,21 @@ def test_sweep_runs_equal_blocks_of_every_feasible_cut():
 def test_sweep_stops_dispatching_once_a_node_is_finished():
     # A fast node must not keep drawing requests while a slow one catches up
     p = Sweep(CFG)
-    n = CFG.experiment.sweep_reqs_per_cut
-    for _ in range(n * len(CFG.cuts_for_tier("C"))):
-        p.select(31)
-    assert p.done(31)
+    for _ in range(CFG.experiment.sweep_reqs_per_cut * len(CFG.cuts_for_tier("A"))):
+        p.select(11)
+    assert p.done(11) and not p.wants(11)
+
+
+def test_sweep_measures_one_node_at_a_time():
+    # Blocks on different nodes must not overlap
+    p = Sweep(CFG)
+    first = p.order[0]
+    assert p.wants(first)
+    assert not any(p.wants(n) for n in p.order[1:])
+
+    for _ in range(CFG.experiment.sweep_reqs_per_cut * len(CFG.cuts_for_tier(
+            next(n.tier for n in CFG.nodes if n.node_id == first)))):
+        p.select(first)
+
+    assert p.active() == p.order[1]        # the next node takes over
+    assert not p.wants(first)

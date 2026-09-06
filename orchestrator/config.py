@@ -74,7 +74,6 @@ class RegistryCfg(Strict):
 class ExperimentCfg(Strict):
     sweep_reqs_per_cut: int
     min_ok_per_node: int
-    fleet_inflight_cap: int
     node_inflight_cap: int
     request_gap_ms: int
 

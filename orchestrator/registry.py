@@ -63,6 +63,3 @@ class Registry:
 
     def alive(self) -> list[NodeState]:
         return [st for st in self.nodes.values() if not self.is_lost(st)]
-
-    def fleet_in_flight(self) -> int:
-        return sum(st.in_flight for st in self.nodes.values())

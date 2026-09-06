@@ -9,6 +9,10 @@ class Policy:
     def select(self, node_id: int) -> str:
         raise NotImplementedError
 
+    def wants(self, node_id: int) -> bool:
+        """Should the scheduler dispatch to this node right now?"""
+        return not self.done(node_id)
+
     def done(self, node_id: int) -> bool:
         """True once this node needs no further requests."""
         return False
@@ -26,14 +30,22 @@ class FixedCut(Policy):
 
 
 class Sweep(Policy):
-    """Every feasible cut per node, reqs_per_cut requests each."""
+    """Every feasible cut per node"""
 
     name = "sweep"
 
     def __init__(self, cfg: Config):
         self.reqs_per_cut = cfg.experiment.sweep_reqs_per_cut
         self.cuts_by_node = {n.node_id: cfg.cuts_for_tier(n.tier) for n in cfg.nodes}
+        self.order = [n.node_id for n in cfg.nodes]
         self.count: dict[int, int] = {}
+
+    def active(self) -> int | None:
+        """The one node currently being measured; None when the sweep is over."""
+        return next((n for n in self.order if not self.done(n)), None)
+
+    def wants(self, node_id: int) -> bool:
+        return node_id == self.active()
 
     def select(self, node_id: int) -> str:
         i = self.count.get(node_id, 0)

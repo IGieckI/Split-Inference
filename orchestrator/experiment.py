@@ -52,6 +52,8 @@ async def amain(args):
         assert best_path.exists(), f"{best_path} missing - run `--policy sweep` first"
         best = {int(k): v for k, v in json.loads(best_path.read_text()).items()}
     policy = make_policy(args.policy, cfg, best_table=best)
+    if args.sweep_reqs and isinstance(policy, Sweep):
+        policy.reqs_per_cut = args.sweep_reqs
 
     run_id = time.strftime("%Y%m%d-%H%M%S") + f"_{policy.name}"
     logger = Logger(db_dir / f"{run_id}.db")
@@ -80,6 +82,7 @@ async def amain(args):
         stop = lambda: all(policy.done(n) for n in node_ids)
     else:
         target = args.min_ok or cfg.experiment.min_ok_per_node
+        scheduler.target_ok = target
         stop = lambda: all(scheduler.ok_count.get(n, 0) >= target for n in node_ids)
 
     try:
@@ -105,6 +108,8 @@ def main():
     ap.add_argument("--policy", required=True,
                     choices=["sweep", "k0", "k_shallow", "k_deep", "best"])
     ap.add_argument("--min-ok", type=int, default=None, help="OK requests per node to stop at")
+    ap.add_argument("--sweep-reqs", type=int, default=None,
+                    help="requests per (node, cut) in a sweep run")
     ap.add_argument("--max-duration", type=float, default=None, help="hard wall-clock cap (s)")
     ap.add_argument("--bind", default="0.0.0.0")
     ap.add_argument("--settle", type=float, default=2.0)
