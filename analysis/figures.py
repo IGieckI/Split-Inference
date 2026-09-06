@@ -221,18 +221,40 @@ def tables(sweep, policy_dbs, cuts_json):
     md.append(md_table(["node", "cut"] + STAGES, t3))
     md.append("\n" + "\n".join(f"- **{k}** - {v}" for k, v in STAGE_HELP.items()) + "\n")
 
-    # T4 - policy comparison
+    # T4 - policy comparison (fleet-concurrent)
     if policy_dbs:
-        md.append("\n## T4 - Policy comparison\n\n")
+        md.append("\n## T4 - Policy comparison (whole fleet active)\n\n")
         t4 = []
         for key, db in policy_dbs.items():
             p = ok_requests(db)
-            for (n, tier), sub in p.groupby(["node_id", "tier"]):
+            for (n, tier), grp in p.groupby(["node_id", "tier"]):
                 t4.append([POLICY_LABELS[key], f"{int(n)} ({tier})",
-                           "/".join(sorted(set(sub["action"]))), len(sub),
-                           f"{sub['t_total_ms'].mean():.1f}",
-                           f"{sub['t_total_ms'].quantile(0.95):.1f}"])
+                           "/".join(sorted(set(grp["action"]))), len(grp),
+                           f"{grp['t_total_ms'].mean():.1f}",
+                           f"{grp['t_total_ms'].quantile(0.95):.1f}"])
         md.append(md_table(["policy", "node", "cut actually run", "n OK", "mean ms", "p95 ms"], t4))
+
+    # T5 - the cost of sharing the server
+    if policy_dbs:
+        md.append("\n## T5 - Cost of running the fleet concurrently\n\n")
+        iso = d.groupby(["node_id", "action"])["t_total_ms"].mean()
+        t5 = []
+        for key, db in policy_dbs.items():
+            p = ok_requests(db)
+            for (n, tier), grp in p.groupby(["node_id", "tier"]):
+                cuts_run = set(grp["action"])
+                if len(cuts_run) != 1 or (n, (cut := cuts_run.pop())) not in iso.index:
+                    continue
+                a, b = iso.loc[(n, cut)], grp["t_total_ms"].mean()
+                t5.append([POLICY_LABELS[key], f"{int(n)} ({tier})", cut,
+                           f"{a:.1f}", f"{b:.1f}", f"{(b - a) / a * 100:+.1f}%"])
+        md.append(md_table(["policy", "node", "cut", "isolated (T2)", "concurrent (T4)",
+                            "difference"], t5))
+        md.append("\nThe nodes share one single-worker server tail. This table is how much "
+                  "that costs: the same node running the same cut, measured alone in the "
+                  "sweep versus measured with the whole fleet active under each policy. "
+                  "A policy whose tail work is expensive - k0 runs the entire model plus a "
+                  "JPEG decode on the server - pays here and makes the other nodes pay too.\n")
 
     (OUT / "results.md").write_text("".join(md))
     print((OUT / "results.md").read_text())
