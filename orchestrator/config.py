@@ -23,6 +23,7 @@ class NetworkCfg(Strict):
     subnet: str
     server_ip: str
     wifi_channel: int
+    ap_interface: str
     ports: Ports
     fragment_payload_bytes: int
 
@@ -88,7 +89,6 @@ class SimCfg(Strict):
     capture_ms: int
     jpeg_read_ms: int
     t_edge_ms: dict[str, dict[str, int]]
-    tail_extra_ms: dict[str, float]
 
 
 class ProjectCfg(Strict):

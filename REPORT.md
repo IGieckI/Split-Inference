@@ -24,7 +24,7 @@ is *split inference*, and the interesting claim is that some intermediate cut
 beats both endpoints - and that which cut wins depends on the hardware.
 
 This report measures that claim on real hardware: three ESP32-class boards of
-different capability, one Raspberry Pi as the server, a quantized MobileNetV2,
+different capability, one Linux host as the server, a quantized MobileNetV2,
 and four fixed splitting policies compared on identical inputs.
 
 **What this report does not do:** it does not learn or adapt the split point.
@@ -57,16 +57,26 @@ The measured version of this argument is Table 1.
 | 11 | A | ESP32-S3 devkit | PSRAM, vector ISA | strongest device tier |
 | 21 | B | ESP32 + PSRAM | PSRAM, no vector ISA | mid device tier |
 | 31 | C | ESP32, plain | ~150-200 KB internal SRAM | weakest device tier |
-| - | - | Raspberry Pi 4 | - | soft-AP, server tail, orchestrator, logging |
+| - | - | x86 Linux laptop (Core 7 150U) | - | soft-AP, server tail, orchestrator, logging |
 
 Three tiers exist so that "the best split point depends on the device" is
-testable rather than asserted. The Pi runs the server tail **on its CPU**: a
-GPU-backed server would shrink server time to near zero and quietly decide the
-experiment in favour of shallow cuts.
+testable rather than asserted. The host runs the server tail **on its CPU**,
+with the orchestrator pinned to four cores (`taskset -c 0-3`) so that other work
+on the machine cannot leak into the `queue` column.
 
-The Pi is also the Wi-Fi access point, so the channel is ours: no other traffic,
-a fixed channel, and the ability to inject loss with `netem` for the correctness
-checks.
+That pinning does **not** make this an edge-class server, and the report does
+not pretend otherwise. Measured with `make bench-tail` on four pinned cores, the
+tail costs **0.29 ms for `k0`** (whole model + JPEG decode), **0.13 ms for
+`k_shallow`** and **0.07 ms for `k_deep`** - one to two orders of magnitude
+below what the same work costs on a Pi-class CPU, and unchanged by the pinning
+(0.24 ms unpinned for `k0`). The `server` stage is therefore effectively zero
+here, and so is any queueing behind it. section 7 states what that does to the
+conclusions; it is the single most important caveat in this report.
+
+The host is also the Wi-Fi access point, so the channel is ours: no other
+traffic, a fixed channel, and the ability to inject loss with `netem` for the
+correctness checks. The fleet AP is 2.4 GHz because ESP32 radios have no 5 GHz
+band.
 
 ### 3.2 Model and split points
 
@@ -138,7 +148,7 @@ confirm the abort path fires (gate **G1**).
 
 ### 3.5 Orchestration and timing
 
-One asyncio process on the Pi. Per request: pick the cut for this node -> send
+One asyncio process on the host. Per request: pick the cut for this node -> send
 `ASSIGN` (acked within 100 ms, 3 retries, then the node is marked lost) -> wait
 for the reassembled tensor (bounded by `t_max_ms`) -> run the server tail -> send
 the result back -> write one log row.
@@ -154,7 +164,7 @@ than hidden in it.
 
 **All reported times are durations, never cross-device timestamps.** The device
 measures its own capture and inference with its local monotonic clock and ships
-those two numbers in the trailer; everything else is measured on the Pi's
+those two numbers in the trailer; everything else is measured on the server's
 monotonic clock. No clock synchronisation is needed, and none is performed.
 
 One request row decomposes into five non-overlapping stages that sum to the
@@ -165,7 +175,7 @@ end-to-end latency:
 | `device` | `t_capture_us + t_edge_us` - SPIFFS read + head inference on the MCU |
 | `uplink` | dispatch to last fragment, minus device time: `ASSIGN` RTT + airtime + retransmissions |
 | `queue` | waiting for the server tail's single worker |
-| `server` | tail inference on the Pi (includes JPEG decode for `k0`) |
+| `server` | tail inference on the host (includes JPEG decode for `k0`) |
 | `residual` | result dispatch and scheduler overhead |
 
 ## 4. Method
@@ -303,8 +313,8 @@ negative result and section 6 should say so plainly.
 This is the diagnostic table: it says *why* a cut wins or loses, not just that
 it does. Expected shape, to be confirmed or refuted:
 
-- `k0` should be dominated by `server` (the Pi runs the whole model, including
-  JPEG decode) with a small `device` term.
+- `k0` should be dominated by `server` (the host runs the whole model,
+  including JPEG decode) with a small `device` term.
 - `k_shallow` should show the largest `uplink` (most bytes, most fragments) and
   a modest `device` term.
 - `k_deep` should show the largest `device` term and the smallest `uplink` and
@@ -352,15 +362,19 @@ whole fleet active. The difference is what sharing one server tail costs.
 
 This is the column to watch for the argument the whole project rests on. A
 policy whose server work is expensive - `k0` runs the entire model plus a JPEG
-decode on the Pi - does not only pay for itself, it makes every other node wait.
+decode on the host - does not only pay for itself, it makes every other node
+wait.
 If that shows up here, then **the case for splitting is stronger at fleet scale
 than the isolated numbers of Table 2 suggest**, because splitting moves work off
 the one resource every node is queueing for.
 
-In simulation the effect was large and one-sided: `k0` cost +13% to +44% per
-node once the fleet ran concurrently, while `k_shallow` and `k_deep` cost
-between -0.4% and +2.7%. Whether the real Pi shows the same asymmetry is one of
-the questions this measurement session answers.
+An earlier simulation showed exactly that, and large: `k0` cost +13% to +44%
+per node once the fleet ran concurrently, against -0.4% to +2.7% for the split
+cuts. **That simulation assumed a Pi-class server tail.** With the actual
+server measured at 0.07-0.29 ms per request (section 3.1), the same simulation shows
+the asymmetry gone - every policy within +/-9% - because there is no longer a
+queue to contend for. This table is expected to be flat, and if it is, that is
+a statement about this server, not about split inference.
 
 ### 5.6 Feasibility: which split points each tier can host
 
@@ -409,6 +423,31 @@ run must be repeated.
 
 ## 7. Threats to validity
 
+- **The server is far faster than the edge server this study was designed
+  around, and this decides part of the result.** The design called for a
+  Raspberry Pi 4; that board is no longer available, so the x86 workstation that
+  builds the firmware also runs the AP, the orchestrator and the tail. Measured:
+  0.29 / 0.13 / 0.07 ms per request for `k0` / `k_shallow` / `k_deep`
+  (`make bench-tail`, four pinned cores). Two consequences, both structural:
+  1. **The `server` and `queue` stages are effectively zero**, so the
+     five-stage decomposition collapses to `device` + `uplink`. The cost of
+     sharing a server tail - Table 5, and the strongest argument for splitting
+     at fleet scale - cannot be observed on this hardware. Its cells are
+     expected to be ~0%, and that is a property of the server, not a refutation.
+  2. **The comparison is biased toward `k0`.** Full offload is the policy that
+     puts the most work on the server, so a near-free server is worth most to
+     it. A win for `k0` here is therefore weak evidence; a win for a *split* cut
+     would be strong evidence, since it would have to come entirely from
+     `device` + `uplink`.
+
+  What survives unaffected: Table 1 (bytes on air), the `device` and `uplink`
+  columns of Table 3, and Table 6 (arena feasibility per tier). Those are
+  properties of the boards and the radio, and they are what this report can
+  claim. Anything that depends on the server's speed is reported as measured
+  and read with this bullet in view.
+- **Nothing else may run on the pinned cores.** A compile or a browser
+  competing for cores 0-3 lands in `server` and `queue`. Sessions where that
+  happened must be discarded, not corrected.
 - **Single session, single site.** RSSI and ambient 802.11 occupancy change
   between days. All runs are back to back with fixed placement for exactly this
   reason, but the numbers are not portable to another room.
@@ -432,7 +471,7 @@ run must be repeated.
 - **Cross-node coupling through the server tail is real and not eliminated.**
   The nodes share one single-worker tail, so a policy that gives the other
   nodes expensive tail work - notably `k0`, whose tail decodes a JPEG and runs
-  the whole model on the Pi - raises this node's queue time too. This is not
+  the whole model on the host - raises this node's queue time too. This is not
   hypothetical: during harness validation a concurrent sweep flipped a node's
   argmin (section 4.2), which is why the sweep now measures one node at a time. The
   policy runs remain concurrent by design, so Table 4 carries the coupling and
@@ -473,7 +512,7 @@ make test test-slow                     # unit tests + bit-exact split identity 
 make preflight                          # whole sequence against simulated nodes
 make header fw-A fw-B fw-C              # firmware, one build per tier
 scripts/flash_all.sh A=... B=... C=...
-# Pi: README.md, then `README.md`
+# host AP and the measurement sequence: README.md
 make figures                            # every figure and table in section 5
 ```
 

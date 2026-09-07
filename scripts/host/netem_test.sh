@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Injected loss/delay on the Pi AP interface
+# Injected loss/delay on the host AP interface
 set -euo pipefail
-IF=${IF:-wlan0}
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+IF=${IF:-$(sed -n 's/^ *ap_interface: *\([^ #]*\).*/\1/p' "$ROOT/config.yaml")}
 
 case "${1:?usage: netem_test.sh <loss-percent|off>}" in
   off)

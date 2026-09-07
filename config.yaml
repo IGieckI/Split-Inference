@@ -9,7 +9,8 @@ network:
   wpa2_psk: "fleetsplit-lab"          # change before real deployment
   subnet: 192.168.4.0/24
   server_ip: 192.168.4.1
-  wifi_channel: 6                     # survey first with `iw scan`
+  wifi_channel: 6                     # 2.4 GHz only - ESP32 radios have no 5 GHz band
+  ap_interface: wlan0                 # host NIC that runs the soft-AP (`iw dev`); netem uses it too
   ports:
     control: 5001                     # heartbeat, assign, ack, abort, result
     data: 5002                        # tensor fragments, nack
@@ -28,7 +29,7 @@ model:
 # Cut points.
 cuts:
   - name: k0
-    boundary_op: null                 # full offload: JPEG on the air, full model on Pi
+    boundary_op: null                 # full offload: JPEG on the air, full model on the server
     tensor_name: null
   - name: k_shallow                   # after inverted-residual block 2 (spec k2 role)
     boundary_op: 11                   # 24x24x8 = 4608 B on air
@@ -80,5 +81,3 @@ sim:
     A: {k_shallow: 15, k_deep: 50}
     B: {k_shallow: 35, k_deep: 120}
     C: {k_shallow: 90}
-  # Dev host runs the tail ~10x faster than a Pi 4
-  tail_extra_ms: {k0: 65, k_shallow: 20, k_deep: 8}

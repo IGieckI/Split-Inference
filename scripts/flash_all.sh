@@ -10,4 +10,4 @@ for spec in "$@"; do
     echo "=== tier $tier -> $port"
     bash "$(dirname "$0")/idf_env.sh" "$tier" flash -p "$port"
 done
-echo "All boards flashed. Bring up the Pi AP, then follow README.md."
+echo "All boards flashed. Bring up the host AP, then follow README.md."

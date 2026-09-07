@@ -1,4 +1,4 @@
-"""Render the Pi soft-AP configs (hostapd + dnsmasq with MAC-pinned DHCP reservations) from config.yaml"""
+"""Render the host soft-AP configs (hostapd + dnsmasq with MAC-pinned DHCP reservations)"""
 
 import pathlib
 import sys
@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT))
 from orchestrator.config import load_config  # noqa: E402
 
 HOSTAPD = """\
-interface=wlan0
+interface={iface}
 driver=nl80211
 ssid={ssid}
 hw_mode=g
@@ -24,8 +24,9 @@ wpa_passphrase={psk}
 """
 
 DNSMASQ = """\
-interface=wlan0
+interface={iface}
 bind-interfaces
+port=0
 dhcp-range=192.168.4.10,192.168.4.200,255.255.255.0,24h
 {reservations}
 """
@@ -42,9 +43,10 @@ def main():
               "`esptool.py read_mac`) and re-run.")
     res = "\n".join(f"dhcp-host={n.mac},{n.ip},node{n.node_id}" for n in cfg.nodes)
     (out / "hostapd.conf").write_text(HOSTAPD.format(
-        ssid=cfg.network.ssid, channel=cfg.network.wifi_channel,
-        psk=cfg.network.wpa2_psk))
-    (out / "dnsmasq.conf").write_text(DNSMASQ.format(reservations=res))
+        iface=cfg.network.ap_interface, ssid=cfg.network.ssid,
+        channel=cfg.network.wifi_channel, psk=cfg.network.wpa2_psk))
+    (out / "dnsmasq.conf").write_text(DNSMASQ.format(
+        iface=cfg.network.ap_interface, reservations=res))
     print(f"wrote {out}/hostapd.conf and {out}/dnsmasq.conf")
 
 

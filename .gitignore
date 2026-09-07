@@ -25,4 +25,4 @@ runs/
 analysis/out/
 
 # Generated Pi AP configs (rendered from config.yaml)
-scripts/pi/out/
+scripts/host/out/

@@ -28,7 +28,7 @@ STAGE_HELP = {
     "device": "SPIFFS read + head inference on the MCU (device-reported)",
     "uplink": "dispatch to last fragment, minus device time (ASSIGN RTT, airtime, retransmits)",
     "queue": "waiting for the single-worker server tail",
-    "server": "tail inference on the Pi (includes JPEG decode for k0)",
+    "server": "tail inference on the host (includes JPEG decode for k0)",
     "residual": "everything unaccounted for (RESULT dispatch, scheduler overhead)",
 }
 

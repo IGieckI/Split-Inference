@@ -4,7 +4,7 @@ UV := uv run
 IDF_ENV := scripts/idf_env.sh
 
 .PHONY: env model-dev slice-list slice assets-dev header test test-slow arq-test \
-        preflight figures fw-A fw-B fw-C clean
+        preflight bench-tail figures fw-A fw-B fw-C clean
 
 env:                ## create venv + install pinned deps
 	uv sync
@@ -35,6 +35,9 @@ arq-test:           ## ARQ acceptance: 200 tensors per loss level {0,2,5,10,40}%
 
 preflight:          ## full measurement sequence against simulated nodes + verification
 	$(UV) python scripts/preflight.py
+
+bench-tail:         ## what the server tail costs on this host, per cut
+	taskset -c 0-3 $(UV) python scripts/bench_tail.py
 
 
 figures:            ## regenerate all figures + results.md from the newest run DBs

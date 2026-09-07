@@ -17,7 +17,7 @@ def run_step(args_list, log_name, timeout):
     LOGS.mkdir(parents=True, exist_ok=True)
     log = LOGS / f"{log_name}.log"
     cmd = [sys.executable, "-m", "orchestrator.experiment", "--bind", "127.0.0.1",
-           "--sim-tail", "--settle", "1"] + args_list
+           "--settle", "1"] + args_list
     with open(log, "w") as f:
         r = subprocess.run(cmd, cwd=ROOT, stdout=f, stderr=subprocess.STDOUT, timeout=timeout)
     text = log.read_text()
