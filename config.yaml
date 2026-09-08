@@ -40,15 +40,15 @@ cuts:
 
 # The fleet: one board per hardware tier.
 nodes:
-  - {node_id: 11, tier: A, ip: 192.168.4.11, mac: "00:00:00:00:00:11"}
-  - {node_id: 21, tier: B, ip: 192.168.4.21, mac: "00:00:00:00:00:21"}
-  - {node_id: 31, tier: C, ip: 192.168.4.31, mac: "00:00:00:00:00:31"}
+  - {node_id: 11, tier: A, ip: 192.168.4.11, mac: "80:b5:4e:d9:c6:40"}
+  - {node_id: 21, tier: B, ip: 192.168.4.21, mac: "5c:01:3b:87:6d:dc"}
+  - {node_id: 31, tier: C, ip: 192.168.4.31, mac: "8c:94:df:49:41:dc"}
 
 # Feasible cuts per tier
 tiers:
   A: {target: esp32s3, psram: true,  arena_kb: 512, cuts: [k0, k_shallow, k_deep]}
   B: {target: esp32,   psram: true,  arena_kb: 512, cuts: [k0, k_shallow, k_deep]}
-  C: {target: esp32,   psram: false, arena_kb: 120, cuts: [k0, k_shallow]}
+  C: {target: esp32,   psram: false, arena_kb: 0,   cuts: [k0]}   # G3: see below
 
 protocol:
   assign_ack_timeout_ms: 100

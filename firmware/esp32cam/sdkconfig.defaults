@@ -20,6 +20,10 @@ CONFIG_FREERTOS_HZ=1000
 # Brownout detector stays ENABLED (CAM power footgun)
 CONFIG_ESP_BROWNOUT_DET=y
 
+# CPU frequency is a measured quantity's input
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240
+
 # All Phase-1 boards have >=4 MB flash (S3 devkit, AI-Thinker CAM, plain ESP32)
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
@@ -29,3 +33,6 @@ CONFIG_FLEETSPLIT_NODE_ID=21
 CONFIG_FLEETSPLIT_ARENA_KB=512
 CONFIG_SPIRAM=y
 CONFIG_SPIRAM_SPEED_80M=y
+# If PSRAM is absent or in the wrong line mode
+CONFIG_SPIRAM_IGNORE_NOTFOUND=y
+

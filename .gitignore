@@ -26,3 +26,8 @@ analysis/out/
 
 # Generated Pi AP configs (rendered from config.yaml)
 scripts/host/out/
+
+# Editor state from the ESP-IDF VS Code extension
+.vscode/
+firmware/*/.vscode/
+firmware/*/.clangd

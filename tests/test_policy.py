@@ -15,10 +15,14 @@ def test_fixed_cut_policies_per_node():
 
 
 def test_infeasible_cut_clamps_to_deepest_the_tier_can_run():
-    # Tier C (node 31) has no k_deep head
-    assert clamp(CFG, "C", "k_deep") == "k_shallow"
+    # A tier that cannot host a cut must not be handed it.
+    for tier in CFG.tiers:
+        feasible = CFG.cuts_for_tier(tier)
+        clamped = clamp(CFG, tier, "k_deep")
+        assert clamped in feasible
+        assert CFG.cut_index(clamped) == max(CFG.cut_index(c) for c in feasible)
     assert clamp(CFG, "A", "k_deep") == "k_deep"
-    assert make_policy("k_deep", CFG).select(31) == "k_shallow"
+    assert make_policy("k_deep", CFG).select(31) in CFG.cuts_for_tier("C")
 
 
 def test_best_policy_replays_the_sweep_table():
@@ -39,10 +43,11 @@ def test_fixed_cut_policies_never_report_done():
 def test_sweep_runs_equal_blocks_of_every_feasible_cut():
     p = Sweep(CFG)
     n = CFG.experiment.sweep_reqs_per_cut
-    cuts = CFG.cuts_for_tier("C")  # node 31: 2 feasible cuts
-    seq = [p.select(31) for _ in range(n * len(cuts))]
-    assert seq[:n] == [cuts[0]] * n and seq[n:] == [cuts[1]] * n
-    assert p.done(31) and not p.done(11)
+    cuts = CFG.cuts_for_tier("A")  # the tier with the most feasible cuts
+    seq = [p.select(11) for _ in range(n * len(cuts))]
+    for i, cut in enumerate(cuts):
+        assert seq[i * n:(i + 1) * n] == [cut] * n
+    assert p.done(11) and not p.done(31)
 
 
 def test_sweep_stops_dispatching_once_a_node_is_finished():

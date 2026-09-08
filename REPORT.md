@@ -383,16 +383,27 @@ a statement about this server, not about split inference.
 
 ### 5.6 Feasibility: which split points each tier can host
 
-| Tier | Board | `k_shallow` arena | `k_deep` arena | Feasible cuts |
-|---|---|---|---|---|
-| A | ESP32-S3 (PSRAM) | - B | - B | - |
-| B | ESP32 (PSRAM) | - B | - B | - |
-| C | ESP32 (no PSRAM) | - B | - B | - |
+| Tier | Board | Arena source | `k_shallow` | `k_deep` | Feasible cuts |
+|---|---|---|---|---|---|
+| A | ESP32-S3-WROOM-1 N16R8 | 8 MB octal PSRAM @ 80 MHz | 149,972 B | 158,120 B | `k0`, `k_shallow`, `k_deep` |
+| B | ESP32-CAM (ESP32-D0WD) | 8 MB PSRAM @ 40 MHz (4 MB mapped) | 142,296 B | 150,396 B | `k0`, `k_shallow`, `k_deep` |
+| C | ESP32-D0WD-V3, no PSRAM | 100 KB internal static | **needs 138,240 B, has 98,480** | not linked | **`k0` only** |
 
-Filled from each board's boot log (`ARENA cut=... used=...`). If tier C turns out to
-support only `k0`, that is a finding: on the weakest hardware the orchestrator's
-only rational choice is not to split at all, and the heterogeneity of the fleet
-lives in tiers A and B.
+Measured from each board's boot log (`ARENA cut=... used=...`), all three at
+240 MHz. Two results worth stating plainly.
+
+**Tier C cannot split at all.** `k_shallow` asks for 135 KB of arena and the
+plain ESP32 offers 96 KB - short by 39 KB, not by a rounding error. This is the
+outcome the design anticipated: on the weakest hardware the only rational
+choice is not to split, and the fleet's heterogeneity lives in tiers A and B.
+It also means tier C's row in every latency table is a single policy, and that
+`k_deep`'s per-tier clamp (section 4.1) does real work.
+
+**The same cut costs different arena on different silicon.** `k_shallow` needs
+149,972 B on the S3 against 142,296 B on the ESP32 - 7.7 KB more for identical
+weights and identical tensor shapes. The difference is the kernel library: the
+S3 build uses esp-nn's vector paths, which allocate their own scratch. Worth
+knowing before assuming an arena figure ports across a fleet.
 
 ### 5.7 What a slower server would change
 

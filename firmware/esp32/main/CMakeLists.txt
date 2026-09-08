@@ -5,7 +5,6 @@ set(MODELS ../../models/generated)
 idf_component_register(
     SRCS "${SHARED}/main.c" "${SHARED}/wifi.c" "${SHARED}/net_task.c"
          "${SHARED}/input.c" "${SHARED}/ml_task.cc"
-         "${MODELS}/head_k_shallow.cc"
     INCLUDE_DIRS "${SHARED}" "${MODELS}"
     REQUIRES nvs_flash spiffs esp_wifi esp_netif esp_timer driver esp_hw_support)
 
