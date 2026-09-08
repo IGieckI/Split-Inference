@@ -64,19 +64,26 @@ testable rather than asserted. The host runs the server tail **on its CPU**,
 with the orchestrator pinned to four cores (`taskset -c 0-3`) so that other work
 on the machine cannot leak into the `queue` column.
 
-That pinning does **not** make this an edge-class server, and the report does
-not pretend otherwise. Measured with `make bench-tail` on four pinned cores, the
-tail costs **0.29 ms for `k0`** (whole model + JPEG decode), **0.13 ms for
-`k_shallow`** and **0.07 ms for `k_deep`** - one to two orders of magnitude
-below what the same work costs on a Pi-class CPU, and unchanged by the pinning
-(0.24 ms unpinned for `k0`). The `server` stage is therefore effectively zero
-here, and so is any queueing behind it. section 7 states what that does to the
-conclusions; it is the single most important caveat in this report, and section 5.7
-projects what a slower server would have changed.
+The **CPU is capped to 400 MHz** for the session (`intel_pstate`'s floor;
+`README.md`), which is the other half of the server's definition.
+Measured with `make bench-tail` on four pinned cores at that cap:
 
-The frequency ceiling is part of that definition and is capped for the session
-(`README.md`); `make bench-tail` prints the ceiling it measured
-under, and that number belongs in this section alongside the tail costs.
+| cut | mean | p95 | min |
+|---|---|---|---|
+| `k0` (whole model + JPEG decode) | 3.45 ms | 3.51 ms | 3.38 ms |
+| `k_shallow` | 1.36 ms | 1.38 ms | 1.34 ms |
+| `k_deep` | 0.76 ms | 0.78 ms | 0.71 ms |
+
+Uncapped, the same three cost 0.29 / 0.13 / 0.07 ms, so the cap buys a ~12x
+slowdown. Two properties make it usable as a measurement rather than a
+distortion: it is a genuinely slower processor, not an intermittently
+unavailable one - min 3.38 ms against p95 3.51 ms, a distribution as tight as
+the uncapped one - and it is the same slowdown for every policy, so no cut is
+advantaged by it.
+
+This still is not a Pi-class server; it is perhaps a third to a seventh of the
+way there. section 7 states what that costs the conclusions, and section 5.7 projects the
+measured stages onto a slower server.
 
 The host is also the Wi-Fi access point, so the channel is ours: no other
 traffic, a fixed channel, and the ability to inject loss with `netem` for the
@@ -475,14 +482,17 @@ run must be repeated.
 - **The server is far faster than the edge server this study was designed
   around, and this decides part of the result.** The design called for a
   Raspberry Pi 4; that board is no longer available, so the x86 workstation that
-  builds the firmware also runs the AP, the orchestrator and the tail. Measured:
-  0.29 / 0.13 / 0.07 ms per request for `k0` / `k_shallow` / `k_deep`
-  (`make bench-tail`, four pinned cores). Two consequences, both structural:
-  1. **The `server` and `queue` stages are effectively zero**, so the
-     five-stage decomposition collapses to `device` + `uplink`. The cost of
-     sharing a server tail - Table 5, and the strongest argument for splitting
-     at fleet scale - cannot be observed on this hardware. Its cells are
-     expected to be ~0%, and that is a property of the server, not a refutation.
+  builds the firmware also runs the AP, the orchestrator and the tail. Capping
+  the CPU to 400 MHz closes part of the gap - 3.45 / 1.36 / 0.76 ms per request
+  for `k0` / `k_shallow` / `k_deep` against 0.29 / 0.13 / 0.07 ms uncapped
+  (`make bench-tail`, four pinned cores) - but not all of it. Two consequences,
+  both structural, now smaller than they were but not gone:
+  1. **The `server` and `queue` stages stay small.** At 3.45 ms, `k0`'s tail is
+     now a visible term next to a multi-millisecond `uplink`, and three nodes
+     queueing behind one worker can produce measurable contention - Table 5 may
+     have something in it after all, where at 0.29 ms it could not. But the
+     server is still fast enough that a flat Table 5 would be a property of
+     this server rather than a refutation of fleet coupling.
   2. **The comparison is biased toward `k0`.** Full offload is the policy that
      puts the most work on the server, so a near-free server is worth most to
      it. A win for `k0` here is therefore weak evidence; a win for a *split* cut
@@ -497,8 +507,9 @@ run must be repeated.
   onto a slower server, which is the closest this hardware can get to the
   question.
 
-  Two mitigations were tried. Capping the CPU frequency (400 MHz floor via
-  `intel_pstate`) is a real, smooth slowdown and is used for the session. A
+  Two mitigations were tried. Capping the CPU frequency to 400 MHz (the
+  `intel_pstate` floor) is a real, smooth slowdown, is used for the session,
+  and is what the numbers above were measured under. A
   cgroup CPU quota was rejected after measurement: at a 1 ms period - the
   kernel's floor - `CPUQuota=10%` puts the mean `k0` tail at 13.8 ms, which
   looks right, but min stays at 0.26 ms and p95 rises to 30 ms. That is a fast
