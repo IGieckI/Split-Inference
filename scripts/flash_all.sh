@@ -2,12 +2,12 @@
 # Flash every board.
 set -euo pipefail
 
-[ $# -ge 1 ] || { echo "usage: $0 A=/dev/ttyUSB0 [B=/dev/ttyUSB1] [C=/dev/ttyUSB2]"; exit 1; }
+[ $# -ge 1 ] || { echo "usage: $0 esp32s3=/dev/ttyACM0 [esp32cam=/dev/ttyUSB0] [esp32=/dev/ttyUSB1]"; exit 1; }
 
 for spec in "$@"; do
-    tier="${spec%%=*}"
+    board="${spec%%=*}"
     port="${spec#*=}"
-    echo "=== tier $tier -> $port"
-    bash "$(dirname "$0")/idf_env.sh" "$tier" flash -p "$port"
+    echo "=== $board -> $port"
+    bash "$(dirname "$0")/idf_env.sh" "$board" flash -p "$port"
 done
-echo "All boards flashed. Bring up the host AP, then follow README.md."
+echo "All boards flashed. Read each boot log (gate G3), then bring up the host AP."

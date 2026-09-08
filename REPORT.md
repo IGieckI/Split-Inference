@@ -558,8 +558,8 @@ make env                                # python 3.11 venv via uv
 make model-dev slice assets-dev         # model, head/tail slices, flash assets
 make test test-slow                     # unit tests + bit-exact split identity gate
 make preflight                          # whole sequence against simulated nodes
-make header fw-A fw-B fw-C              # firmware, one build per tier
-scripts/flash_all.sh A=... B=... C=...
+make header fw-all                      # firmware, one project per board
+scripts/flash_all.sh esp32s3=... esp32cam=... esp32=...
 # host AP and the measurement sequence: README.md
 make figures                            # every figure and table in section 5
 ```

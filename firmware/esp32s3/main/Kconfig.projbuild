@@ -1,0 +1,27 @@
+menu "FleetSplit"
+
+    choice FLEETSPLIT_TIER
+        prompt "Node tier"
+        default FLEETSPLIT_TIER_A
+
+        config FLEETSPLIT_TIER_A
+            bool "Tier A: ESP32-S3, flash inputs, heads {k_shallow, k_deep}"
+        config FLEETSPLIT_TIER_B
+            bool "Tier B: ESP32 + PSRAM, flash inputs, heads {k_shallow, k_deep}"
+        config FLEETSPLIT_TIER_C
+            bool "Tier C: plain ESP32, flash inputs, head {k_shallow}"
+    endchoice
+
+    config FLEETSPLIT_NODE_ID
+        int "Node ID (matches config.yaml nodes[].node_id)"
+        default 11
+
+    config FLEETSPLIT_ARENA_KB
+        int "TFLM arena size per head interpreter (KB)"
+        default 512
+        help
+            Tiers A/B allocate this from PSRAM at boot; tier C from internal
+            SRAM (static). Actual usage is printed at boot and belongs in
+            cuts.json arena_bytes.
+
+endmenu

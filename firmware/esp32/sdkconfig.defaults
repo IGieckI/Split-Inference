@@ -1,0 +1,29 @@
+# plain ESP32, no PSRAM - tier C, node 31.
+
+# The chip.
+CONFIG_IDF_TARGET="esp32"
+
+# common to all three boards
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# Task watchdog
+CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+CONFIG_ESP_TASK_WDT_PANIC=y
+
+# D2 throttling via esp_pm_configure
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_HZ=1000
+
+# Brownout detector stays ENABLED (CAM power footgun)
+CONFIG_ESP_BROWNOUT_DET=y
+
+# All Phase-1 boards have >=4 MB flash (S3 devkit, AI-Thinker CAM, plain ESP32)
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# tier C - No PSRAM
+CONFIG_FLEETSPLIT_TIER_C=y
+CONFIG_FLEETSPLIT_NODE_ID=31
+CONFIG_FLEETSPLIT_ARENA_KB=100

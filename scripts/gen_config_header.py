@@ -1,4 +1,4 @@
-"""config.yaml + cuts.json -> firmware/main/fleet_config.h"""
+"""config.yaml + cuts.json -> firmware/common/fleet_config.h"""
 
 import json
 import pathlib
@@ -41,7 +41,7 @@ def main():
             max_tensor = max(max_tensor, info["tensor_bytes"])
     lines += ["", f"#define FLEET_MAX_TENSOR_BYTES {max_tensor}", ""]
 
-    out = ROOT / "firmware" / "main" / "fleet_config.h"
+    out = ROOT / "firmware" / "common" / "fleet_config.h"
     out.write_text("\n".join(lines))
     print(f"wrote {out}")
 

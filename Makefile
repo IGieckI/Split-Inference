@@ -4,7 +4,7 @@ UV := uv run
 IDF_ENV := scripts/idf_env.sh
 
 .PHONY: env model-dev slice-list slice assets-dev header test test-slow arq-test \
-        preflight bench-tail figures fw-A fw-B fw-C clean
+        preflight bench-tail figures fw-esp32s3 fw-esp32cam fw-esp32 fw-all clean
 
 env:                ## create venv + install pinned deps
 	uv sync
@@ -21,7 +21,7 @@ slice:              ## cut model at config.yaml boundaries -> heads/tails/cuts.j
 assets-dev:         ## 50 synthetic dev images -> JPEG + int8 raw flash assets
 	$(UV) python model/make_flash_assets.py --dev
 
-header:             ## config.yaml -> firmware/main/fleet_config.h
+header:             ## config.yaml -> firmware/common/fleet_config.h
 	$(UV) python scripts/gen_config_header.py
 
 test:               ## fast unit tests
@@ -43,8 +43,11 @@ bench-tail:         ## what the server tail costs on this host, per cut
 figures:            ## regenerate all figures + results.md from the newest run DBs
 	$(UV) python analysis/figures.py
 
-fw-A fw-B fw-C:     ## compile firmware per tier (uses ~/.espressif v5.5.3)
+fw-esp32s3 fw-esp32cam fw-esp32:  ## build one board's firmware (uses ~/.espressif v5.5.3)
 	bash $(IDF_ENV) $(subst fw-,,$@)
 
+fw-all:             ## build all three boards
+	$(MAKE) fw-esp32s3 fw-esp32cam fw-esp32
+
 clean:
-	rm -rf firmware/build* model/artifacts model/assets_dev firmware/models/generated analysis/out
+	rm -rf firmware/*/build model/artifacts model/assets_dev firmware/models/generated analysis/out

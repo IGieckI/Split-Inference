@@ -1,5 +1,0 @@
-# Tier C: plain ESP32, no PSRAM, ~150-200 KB usable SRAM. Arena is internal
-# static; whether k_shallow fits is gate G2 — if not, F_C = {k0} (spec §10).
-CONFIG_FLEETSPLIT_TIER_C=y
-CONFIG_FLEETSPLIT_NODE_ID=31
-CONFIG_FLEETSPLIT_ARENA_KB=100

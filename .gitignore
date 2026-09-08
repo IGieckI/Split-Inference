@@ -11,14 +11,14 @@ model/assets_dev/
 
 # Generated firmware inputs
 firmware/models/generated/
-firmware/main/fleet_config.h
+firmware/common/fleet_config.h
 
 # ESP-IDF build output
-firmware/build*/
-firmware/sdkconfig
-firmware/sdkconfig.old
-firmware/managed_components/
-firmware/dependencies.lock
+firmware/*/build/
+firmware/*/sdkconfig
+firmware/*/sdkconfig.old
+firmware/*/managed_components/
+firmware/*/dependencies.lock
 
 # Experiment data & figures
 runs/

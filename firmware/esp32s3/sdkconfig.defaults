@@ -1,4 +1,9 @@
-# FleetSplit common firmware defaults (all tiers)
+# ESP32-S3 devkit - tier A, node 11.
+
+# The chip.
+CONFIG_IDF_TARGET="esp32s3"
+
+# common to all three boards
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
@@ -17,3 +22,11 @@ CONFIG_ESP_BROWNOUT_DET=y
 
 # All Phase-1 boards have >=4 MB flash (S3 devkit, AI-Thinker CAM, plain ESP32)
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# tier A - PSRAM expected
+CONFIG_FLEETSPLIT_TIER_A=y
+CONFIG_FLEETSPLIT_NODE_ID=11
+CONFIG_FLEETSPLIT_ARENA_KB=512
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_QUAD=y
+CONFIG_SPIRAM_SPEED_80M=y
