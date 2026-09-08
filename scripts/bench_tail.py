@@ -2,6 +2,7 @@
 
 import json
 import os
+import pathlib
 import statistics
 import sys
 import time
@@ -14,13 +15,21 @@ from orchestrator.tail import Tail  # noqa: E402
 WARMUP, ITERS = 10, 100
 
 
+def cpu_cap_mhz():
+    """The frequency ceiling the tail actually runs under"""
+    caps = {int(f.read_text()) // 1000 for f in
+            pathlib.Path("/sys/devices/system/cpu").glob("cpu*/cpufreq/scaling_max_freq")}
+    return f"{min(caps)}-{max(caps)} MHz" if caps else "unknown"
+
+
 def main():
     cfg = load_config()
     tail = Tail(cfg)
     jpeg = (ROOT / "model/assets_dev/img00.jpg").read_bytes()
     cuts = json.loads((ROOT / cfg.model.artifacts_dir / "cuts.json").read_text())["cuts"]
 
-    print(f"cores available: {len(os.sched_getaffinity(0))}, {ITERS} iterations per cut")
+    print(f"cores available: {len(os.sched_getaffinity(0))}, "
+          f"cpu max freq: {cpu_cap_mhz()}, {ITERS} iterations per cut")
     for c in cuts:
         blob = jpeg if c["boundary_op"] is None else bytes(c["tensor_bytes"])
         for _ in range(WARMUP):

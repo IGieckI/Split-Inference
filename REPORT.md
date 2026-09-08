@@ -71,7 +71,12 @@ tail costs **0.29 ms for `k0`** (whole model + JPEG decode), **0.13 ms for
 below what the same work costs on a Pi-class CPU, and unchanged by the pinning
 (0.24 ms unpinned for `k0`). The `server` stage is therefore effectively zero
 here, and so is any queueing behind it. section 7 states what that does to the
-conclusions; it is the single most important caveat in this report.
+conclusions; it is the single most important caveat in this report, and section 5.7
+projects what a slower server would have changed.
+
+The frequency ceiling is part of that definition and is capped for the session
+(`README.md`); `make bench-tail` prints the ceiling it measured
+under, and that number belongs in this section alongside the tail costs.
 
 The host is also the Wi-Fi access point, so the channel is ours: no other
 traffic, a fixed channel, and the ability to inject loss with `netem` for the
@@ -389,7 +394,40 @@ support only `k0`, that is a finding: on the weakest hardware the orchestrator's
 only rational choice is not to split at all, and the heterogeneity of the fleet
 lives in tiers A and B.
 
-### 5.7 Reliability
+### 5.7 What a slower server would change
+
+![projected latency vs server speed](analysis/out/server_sensitivity.png)
+
+<!-- PASTE: analysis/out/results.md section T6 -->
+
+| node | best cut on this server | cut that takes over | server slower by | k0 tail cost at crossover (ms) |
+|---|---|---|---|---|
+| 11 (A) | - | - | - | - |
+| ... | | | | |
+
+The server here is fast enough that `server` and `queue` barely register (section 3.1),
+which favours full offload. This section asks what would change on a slower one
+**without pretending to have measured it**: hold the measured `device`, `uplink`
+and `residual` stages fixed - they are properties of the boards and the radio,
+and a different server does not touch them - and scale the measured `server`
+stage by a factor. The crossover is where a split cut overtakes `k0`.
+
+Two things make this a projection rather than a result, and both are stated on
+the figure's own terms:
+
+- The server axis is assumed, not measured. Only its *shape* is
+  measured - the per-cut ratio of tail costs is real, since all three tails were
+  timed on the same machine with the same interpreter.
+- Queueing is excluded, because a single-worker trace cannot predict it. A
+  slower server also queues, and queueing costs whichever policy leans on the
+  tail hardest - which is `k0`. **The real crossover therefore arrives earlier
+  than this table says**, making every number here conservative.
+
+What it is good for: reading the report's headline result off a different
+deployment. If your edge server does the full model in, say, 40 ms, this is the
+table that says whether splitting would have paid.
+
+### 5.8 Reliability
 
 | Run | requests | OK | TIMEOUT | CRC | LOST | reboots |
 |---|---|---|---|---|---|---|
@@ -441,10 +479,20 @@ run must be repeated.
      `device` + `uplink`.
 
   What survives unaffected: Table 1 (bytes on air), the `device` and `uplink`
-  columns of Table 3, and Table 6 (arena feasibility per tier). Those are
+  columns of Table 3, and the arena feasibility table (section 5.6). Those are
   properties of the boards and the radio, and they are what this report can
   claim. Anything that depends on the server's speed is reported as measured
-  and read with this bullet in view.
+  and read with this bullet in view - and section 5.7 projects the measured stages
+  onto a slower server, which is the closest this hardware can get to the
+  question.
+
+  Two mitigations were tried. Capping the CPU frequency (400 MHz floor via
+  `intel_pstate`) is a real, smooth slowdown and is used for the session. A
+  cgroup CPU quota was rejected after measurement: at a 1 ms period - the
+  kernel's floor - `CPUQuota=10%` puts the mean `k0` tail at 13.8 ms, which
+  looks right, but min stays at 0.26 ms and p95 rises to 30 ms. That is a fast
+  CPU stalling, not a slow CPU, and the artificial tail would land hardest on
+  the policy that uses the server most, which is the effect under test.
 - **Nothing else may run on the pinned cores.** A compile or a browser
   competing for cores 0-3 lands in `server` and `queue`. Sessions where that
   happened must be discarded, not corrected.

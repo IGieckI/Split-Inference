@@ -172,6 +172,79 @@ def policy_cdfs(policy_dbs: dict):
     plt.close(fig)
 
 
+# figure 4 + T6: what a slower server would change - The tail on this host
+SERVER_FACTORS = np.logspace(0, 3, 200)
+
+
+def server_projection(sweep):
+    d = ok_requests(sweep)
+    base = d.groupby(["node_id", "tier", "action"])[["device", "uplink", "residual", "server"]].mean()
+    rows = []
+    for (node, tier, cut), r in base.iterrows():
+        fixed = r["device"] + r["uplink"] + r["residual"]
+        rows.append({"node_id": int(node), "tier": tier, "action": cut,
+                     "fixed_ms": fixed, "server_ms": r["server"],
+                     "pred": fixed + SERVER_FACTORS * r["server"]})
+    return rows
+
+
+def crossovers(rows):
+    """Per node: the winner now, the winner on a slow server, and where it flips."""
+    out = []
+    for node in sorted({r["node_id"] for r in rows}):
+        cand = [r for r in rows if r["node_id"] == node]
+        stacked = np.vstack([r["pred"] for r in cand])
+        winner_at = [cand[i]["action"] for i in stacked.argmin(axis=0)]
+        k0 = next((r for r in cand if r["action"] == "k0"), None)
+        flip = next((i for i, w in enumerate(winner_at) if w != winner_at[0]), None)
+        out.append({
+            "node_id": node, "tier": cand[0]["tier"],
+            "now": winner_at[0], "slow": winner_at[-1],
+            "factor": SERVER_FACTORS[flip] if flip is not None else None,
+            "k0_tail_ms": (SERVER_FACTORS[flip] * k0["server_ms"]) if flip is not None and k0 else None,
+            "wins": winner_at[flip] if flip is not None else None,
+        })
+    return out
+
+
+def server_sensitivity(sweep):
+    rows = server_projection(sweep)
+    nodes = sorted({r["node_id"] for r in rows})
+    flips = {c["node_id"]: c for c in crossovers(rows)}
+    fig, axes = plt.subplots(1, len(nodes), figsize=(3.7 * len(nodes), 3.7), sharey=True)
+    for ax, node in zip(np.atleast_1d(axes), nodes):
+        cand = [r for r in rows if r["node_id"] == node]
+        k0 = next((r for r in cand if r["action"] == "k0"), None)
+        # x axis in units the reader can reason about
+        x = SERVER_FACTORS * (k0["server_ms"] if k0 else 1.0)
+        for r in sorted(cand, key=lambda r: list(CUT_COLORS).index(r["action"])):
+            ax.plot(x, r["pred"], lw=2, color=CUT_COLORS[r["action"]], label=r["action"])
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        f = flips[node]
+        if f["k0_tail_ms"]:
+            ax.axvline(f["k0_tail_ms"], color=INK2, lw=1.2, ls=(0, (4, 3)), zorder=2)
+            # label on whichever side of the rule has room
+            lo, hi = np.log10(ax.get_xlim())
+            right = (np.log10(f["k0_tail_ms"]) - lo) / (hi - lo) > 0.55
+            ax.annotate(f"{f['wins']} wins\nfrom {f['k0_tail_ms']:.0f} ms",
+                        (f["k0_tail_ms"], ax.get_ylim()[1]), xytext=(-5 if right else 5, -12),
+                        textcoords="offset points", fontsize=8.5, color=INK2,
+                        va="top", ha="right" if right else "left")
+        style(ax)
+        ax.set_title(f"node {node} (tier {cand[0]['tier']})", color=INK2)
+        ax.set_xlabel("assumed k0 tail cost (ms)")
+    np.atleast_1d(axes)[0].set_ylabel("projected end-to-end latency (ms)")
+    handles, labels = np.atleast_1d(axes)[0].get_legend_handles_labels()
+    fig.legend(handles, labels, frameon=False, ncol=len(labels), loc="upper center",
+               bbox_to_anchor=(0.5, 1.04))
+    fig.suptitle("Projected latency as the server gets slower (measured stages, scaled tail)",
+                 y=1.13, color=INK)
+    fig.tight_layout()
+    fig.savefig(OUT / "server_sensitivity.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
 # tables
 def md_table(header, rows):
     out = ["| " + " | ".join(header) + " |",
@@ -256,6 +329,25 @@ def tables(sweep, policy_dbs, cuts_json):
                   "A policy whose tail work is expensive - k0 runs the entire model plus a "
                   "JPEG decode on the server - pays here and makes the other nodes pay too.\n")
 
+    # T6 - how much slower the server would have to be for splitting to win
+    md.append("\n## T6 - Server-speed sensitivity (projection, not measurement)\n\n")
+    t6 = []
+    for c in crossovers(server_projection(sweep)):
+        t6.append([f"{c['node_id']} ({c['tier']})", c["now"],
+                   c["wins"] or "-",
+                   f"{c['factor']:.0f}x" if c["factor"] else "no crossover",
+                   f"{c['k0_tail_ms']:.0f}" if c["k0_tail_ms"] else "-"])
+    md.append(md_table(["node", "best cut on this server", "cut that takes over",
+                        "server slower by", "k0 tail cost at crossover (ms)"], t6))
+    md.append("\nHolds the measured `device`, `uplink` and `residual` stages fixed and "
+              "scales the measured `server` stage. It answers one question: how much "
+              "slower would the tail have to be before splitting beats full offload on "
+              "this fleet? Queueing is excluded from the projection - a slower server "
+              "also queues, and queueing costs whichever policy leans on the tail most, "
+              "so the real crossover arrives **earlier** than this table says. "
+              "A projection, clearly, not a measurement: the device and network numbers "
+              "in it are measured, the server axis is assumed.\n")
+
     (OUT / "results.md").write_text("".join(md))
     print((OUT / "results.md").read_text())
 
@@ -283,6 +375,7 @@ def main():
 
     latency_by_cut(sweep)
     stage_breakdown(sweep)
+    server_sensitivity(sweep)
     if policy_dbs:
         policy_cdfs(policy_dbs)
     tables(sweep, policy_dbs, cuts_json)
