@@ -39,7 +39,10 @@ def main():
             info = next(c for c in cuts if c["name"] == cut.name)
             lines.append(f"#define FLEET_TENSOR_BYTES_CUT{i} {info['tensor_bytes']}")
             max_tensor = max(max_tensor, info["tensor_bytes"])
-    lines += ["", f"#define FLEET_MAX_TENSOR_BYTES {max_tensor}", ""]
+    lines += ["", f"#define FLEET_MAX_TENSOR_BYTES {max_tensor}", "",
+              "/* The orchestrator abandons a request after this; the device must not",
+              "   stay busy any longer, or it misses the next ASSIGN. */",
+              f"#define FLEET_T_MAX_MS {cfg.protocol.t_max_ms}", ""]
 
     out = ROOT / "firmware" / "common" / "fleet_config.h"
     out.write_text("\n".join(lines))

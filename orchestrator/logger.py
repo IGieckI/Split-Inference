@@ -1,5 +1,6 @@
 """SQLite logging."""
 
+import pathlib
 import sqlite3
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -7,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs(
   run_id TEXT PRIMARY KEY, started_at TEXT, policy_name TEXT,
-  config_json TEXT, git_hash TEXT);
+  config_json TEXT, git_hash TEXT, cpu_max_khz INTEGER);
 CREATE TABLE IF NOT EXISTS requests(
   run_id TEXT, req_id INTEGER, node_id INTEGER, tier TEXT,
   action TEXT, rssi_dbm INTEGER,
@@ -27,6 +28,13 @@ REQUEST_COLS = ("req_id node_id tier action rssi_dbm "
                 "status pred_class bytes_on_air").split()
 
 
+def cpu_max_khz():
+    """The CPU ceiling this run was measured under."""
+    caps = {int(f.read_text()) for f in
+            pathlib.Path("/sys/devices/system/cpu").glob("cpu*/cpufreq/scaling_max_freq")}
+    return max(caps) if caps else None
+
+
 class Logger:
     def __init__(self, db_path):
         self.db_path = str(db_path)
@@ -44,9 +52,9 @@ class Logger:
     def start_run(self, run_id, policy_name, config_json, git_hash):
         self.run_id = run_id
         self.executor.submit(
-            self._exec, "INSERT INTO runs VALUES (?,?,?,?,?)",
+            self._exec, "INSERT INTO runs VALUES (?,?,?,?,?,?)",
             (run_id, time.strftime("%Y-%m-%dT%H:%M:%S"), policy_name,
-             config_json, git_hash)).result()
+             config_json, git_hash, cpu_max_khz())).result()
 
     def _exec(self, sql, params):
         self.conn.execute(sql, params)

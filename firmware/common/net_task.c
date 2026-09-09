@@ -158,9 +158,14 @@ static void ml_pipeline_task(void *arg)
 
         for (uint16_t i = 0; i < s_frag_total; i++) send_frag(i);
 
-        /* SENDING -> wait for RESULT (or ABORT / idle timeout) -> IDLE */
-        xEventGroupWaitBits(s_evt, RESULT_BIT | ABORT_BIT, pdTRUE, pdFALSE,
-                            pdMS_TO_TICKS(10000));
+        /* SENDING -> wait for RESULT (or ABORT) -> IDLE. */
+        for (int waited_ms = 0; waited_ms < FLEET_T_MAX_MS; waited_ms += 500) {
+            esp_task_wdt_reset();
+            EventBits_t bits = xEventGroupWaitBits(s_evt, RESULT_BIT | ABORT_BIT,
+                                                   pdTRUE, pdFALSE, pdMS_TO_TICKS(500));
+            if (bits & (RESULT_BIT | ABORT_BIT)) break;
+        }
+        esp_task_wdt_reset();
         s_busy = false;
     }
 }
@@ -172,8 +177,13 @@ static void on_ctrl(const uint8_t *buf, int n)
     if (h->type == PKT_ASSIGN && n >= (int)(sizeof(*h) + sizeof(pkt_assign_t))) {
         const pkt_assign_t *as = (const pkt_assign_t *)(buf + sizeof(*h));
         if (s_busy) {
-            if (h->req_id == s_cur_req) ctrl_send(PKT_ASSIGN_ACK, h->req_id, NULL, 0);
-            return; /* new request while busy: ignore, orchestrator caps 1/node */
+            if (h->req_id == s_cur_req) {
+                ctrl_send(PKT_ASSIGN_ACK, h->req_id, NULL, 0);
+            } else {
+                /* An ASSIGN for a DIFFERENT request is proof the orchestrator has finished with the current one */
+                xEventGroupSetBits(s_evt, ABORT_BIT);
+            }
+            return;
         }
         s_busy = true;
         s_cur_req = h->req_id;

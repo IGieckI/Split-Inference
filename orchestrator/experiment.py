@@ -10,7 +10,7 @@ import time
 import yaml
 
 from .config import ROOT, load_config
-from .logger import Logger
+from .logger import Logger, cpu_max_khz
 from .policy import Sweep, make_policy
 from .reassembly import Reassembler
 from .registry import Registry
@@ -69,6 +69,9 @@ async def amain(args):
     scheduler = Scheduler(cfg, registry, policy, reassembler, tail, server, logger)
     server.scheduler, server.reassembler = scheduler, reassembler
 
+    khz = cpu_max_khz()
+    print(f"[experiment] server CPU ceiling {khz // 1000 if khz else '?'} MHz "
+          f"(capped for the session - see REPORT.md section 3.1)")
     print(f"[experiment] run {run_id}: waiting for {len(cfg.nodes)} nodes ...")
     while len(registry.alive()) < len(cfg.nodes):
         await asyncio.sleep(0.2)
