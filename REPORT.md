@@ -534,6 +534,14 @@ run must be repeated.
 - **Stored images, not live capture.** Capture cost on a real camera is not
   included in `device`. This makes the comparison cleaner and understates
   absolute latency for a camera deployment by the capture time.
+- **The SPIFFS read is not free, and is not quite equal across policies.**
+  `k0` reads a ~1.8 KB JPEG, every split cut reads the 27,648 B raw tensor.
+  Measured, that is 17-37 ms against 32-41 ms: 15x the bytes for ~1.4x the
+  time, because SPIFFS cost here is dominated by `fopen`, not throughput. So
+  the split cuts carry roughly 10 ms of extra read that a camera deployment
+  would not pay, against head inference of 121-546 ms. It is reported in the
+  `device` column rather than removed, and it is far too small to change any
+  ordering.
 - **JPEG size depends on image content.** `k0`'s bytes on air vary per image
   (dev assets: 1,362-2,326 B); the other cuts are fixed-size. Table 1 reports the
   mean, and all policies see the same 50 images, so the comparison is fair - but

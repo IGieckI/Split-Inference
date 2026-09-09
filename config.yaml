@@ -77,7 +77,7 @@ sim:
   rssi_dbm: {A: -62, B: -50, C: -75}  # per-tier link profile (mid/good/bad bins)
   capture_ms: 2                       # SPIFFS read of the raw int8 tensor
   jpeg_read_ms: 1                     # SPIFFS read of the stored JPEG
+  # Pre-hardware estimates
   t_edge_ms:                          # per tier, per arm, at 240 MHz
     A: {k_shallow: 15, k_deep: 50}
     B: {k_shallow: 35, k_deep: 120}
-    C: {k_shallow: 90}
