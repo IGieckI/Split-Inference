@@ -15,6 +15,10 @@ cleanup() {
     echo
     echo "[ap] stopping"
     kill ${HOSTAPD_PID:-} ${DNSMASQ_PID:-} 2>/dev/null || true
+    if [ "${FIREWALLD_MOVED:-0}" = 1 ]; then
+        firewall-cmd --zone=trusted --remove-interface="$IF" >/dev/null 2>&1 || true
+        echo "[ap] $IF removed from the firewalld trusted zone"
+    fi
     ip addr flush dev "$IF" 2>/dev/null || true
     nmcli device set "$IF" managed yes 2>/dev/null || true
     echo "[ap] $IF handed back to NetworkManager"
@@ -27,6 +31,13 @@ nmcli device set "$IF" managed no
 ip addr flush dev "$IF"
 ip addr add "$IP/24" dev "$IF"
 ip link set "$IF" up
+
+# firewalld's default zone (public) allows only ssh and dhcpv6-client
+if command -v firewall-cmd >/dev/null && firewall-cmd --state >/dev/null 2>&1; then
+    firewall-cmd --zone=trusted --change-interface="$IF" >/dev/null
+    FIREWALLD_MOVED=1
+    echo "[ap] $IF moved to the firewalld trusted zone (restored on exit)"
+fi
 
 # dnsmasq FIRST.
 echo "[ap] dnsmasq (DHCP only, port=0)"
