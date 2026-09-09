@@ -27,6 +27,7 @@ DNSMASQ = """\
 interface={iface}
 bind-interfaces
 port=0
+dhcp-authoritative
 dhcp-range=192.168.4.10,192.168.4.200,255.255.255.0,24h
 {reservations}
 """

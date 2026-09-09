@@ -28,15 +28,18 @@ ip addr flush dev "$IF"
 ip addr add "$IP/24" dev "$IF"
 ip link set "$IF" up
 
+# dnsmasq FIRST.
+echo "[ap] dnsmasq (DHCP only, port=0)"
+dnsmasq -C "$OUT/dnsmasq.conf" -d &
+DNSMASQ_PID=$!
+sleep 1
+kill -0 "$DNSMASQ_PID" 2>/dev/null || { echo "[ap] dnsmasq died - see its output above"; exit 1; }
+
 echo "[ap] hostapd on $IF (2.4 GHz - the ESP32s have no 5 GHz radio)"
 hostapd "$OUT/hostapd.conf" &
 HOSTAPD_PID=$!
 sleep 2
 kill -0 "$HOSTAPD_PID" 2>/dev/null || { echo "[ap] hostapd died - see its output above"; exit 1; }
-
-echo "[ap] dnsmasq (DHCP only, port=0)"
-dnsmasq -C "$OUT/dnsmasq.conf" -d &
-DNSMASQ_PID=$!
 
 echo "[ap] up. Expect per board: AP-STA-CONNECTED then DHCPACK ... node11/21/31"
 wait -n
