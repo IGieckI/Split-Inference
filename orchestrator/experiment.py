@@ -73,7 +73,16 @@ async def amain(args):
     print(f"[experiment] server CPU ceiling {khz // 1000 if khz else '?'} MHz "
           f"(capped for the session - see REPORT.md section 3.1)")
     print(f"[experiment] run {run_id}: waiting for {len(cfg.nodes)} nodes ...")
+    deadline = time.monotonic() + args.wait_timeout
     while len(registry.alive()) < len(cfg.nodes):
+        if time.monotonic() > deadline:
+            missing = sorted({n.node_id for n in cfg.nodes} - {s.node_id for s in registry.alive()})
+            print(f"[experiment] ABORT: nodes {missing} never appeared within "
+                  f"{args.wait_timeout:.0f} s - check their serial logs")
+            tail.stop()
+            server.close()
+            logger.close()
+            return None
         await asyncio.sleep(0.2)
     await asyncio.sleep(args.settle)
     print(f"[experiment] all nodes up; policy {policy.name}")
@@ -114,7 +123,10 @@ def main():
     ap.add_argument("--max-duration", type=float, default=None, help="hard wall-clock cap (s)")
     ap.add_argument("--bind", default="0.0.0.0")
     ap.add_argument("--settle", type=float, default=2.0)
-    asyncio.run(amain(ap.parse_args()))
+    ap.add_argument("--wait-timeout", type=float, default=180.0,
+                    help="give up if the fleet is not complete within this many seconds")
+    if asyncio.run(amain(ap.parse_args())) is None:
+        raise SystemExit(1)  # incomplete fleet: let a driving script stop here
 
 
 if __name__ == "__main__":
