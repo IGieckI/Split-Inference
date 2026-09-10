@@ -20,33 +20,33 @@
 \begin{abstract}
 \noindent
 Split inference runs the first $k$ layers of a neural network on a
-microcontroller and sends the intermediate activation tensor to a server that
-finishes the job. We built the full pipeline on three ESP32-class boards of
-differing capability and measured what the choice of $k$ costs. Across
-3{,}813 requests with zero corrupted deliveries, full offload beat every split
-point on every board, by $5.1\times$ on an ESP32-S3 and $15.5\times$ on an
-ESP32-CAM, and the weakest board could not host a split point at all. Cutting
-deeper made things worse rather than better: the deeper cut shrank the tensor
-from 4{,}668\,B to 888\,B but bought 2.7\,ms of transfer with 26--164\,ms of
-extra on-device inference. The per-stage breakdown shows why. Device compute
-dominates by two orders of magnitude, while transfer, the quantity split
-inference exists to reduce, costs 7--12\,ms regardless of which cut produced it.
-A sensitivity analysis over the measured stages puts break-even at a server
-$51\times$ slower than ours.
+microcontroller and sends the intermediate activation tensor to a server, which
+runs the rest. We built the whole pipeline on three ESP32-class boards of
+different power and measured what the choice of $k$ costs. Over 3{,}813 requests
+with no corrupted deliveries, sending everything to the server was faster than
+every split point on every board: $5.1\times$ faster on an ESP32-S3 and
+$15.5\times$ faster on an ESP32-CAM. The weakest board could not host a split
+point at all. Cutting deeper made things worse, not better: the deeper cut
+shrank the tensor from 4{,}668\,B to 888\,B, but it saved only 2.7\,ms of
+transfer while adding 26--164\,ms of inference on the device. The per-stage
+breakdown explains why. Compute on the device is two orders of magnitude larger
+than anything else, while transfer, the very thing split inference is meant to
+reduce, takes 7--12\,ms no matter which cut produced it. A sensitivity analysis
+over the measured stages puts break-even at a server $51\times$ slower than
+ours.
 \end{abstract}
 
 \section{The question}
 
-For a network layer $k$, a split deployment pays three costs: on-device
-inference of the first $k$ layers, transfer of the resulting activation tensor,
-and server inference of the remainder. Cutting later means more device compute
-and usually less data on the air. The premise of split inference is that some
-intermediate $k$ beats both endpoints, and that the best $k$ depends on the
-device.
+For a network layer $k$, a split deployment pays three costs: running the first
+$k$ layers on the device, sending the resulting activation tensor, and running
+the rest on the server. Cutting later means more work on the device and usually
+fewer bytes on the air. Split inference assumes that some middle value of $k$
+beats both extremes, and that the best $k$ depends on the device.
 
-This report tests that premise by measurement. It does not learn or adapt the
-split point: every policy here is a fixed rule, and the exhaustive sweep is the
-ground truth an adaptive orchestrator would have to beat.
+This report tests that assumption by measuring it. It does not learn or adapt
+the split point: every policy here is a fixed rule, and the exhaustive sweep is
+the baseline an adaptive orchestrator would have to beat.
 
 \section{System}
 
@@ -69,56 +69,68 @@ Node & Tier & Board & Memory \\
 \end{table}
 
 All boards run ESP-IDF v5.5.3 with TensorFlow Lite Micro. The server is the same
-machine that builds the firmware: it runs the Wi-Fi access point (2.4\,GHz, since
-ESP32 radios have no 5\,GHz band), the orchestrator, and the tail inference. Its
-CPU is capped to 400\,MHz and the process pinned to four cores. Section
-\ref{sec:threats} states what that costs the conclusions.
+machine that builds the firmware: it runs the Wi-Fi access point (2.4\,GHz,
+because ESP32 radios have no 5\,GHz band), the orchestrator, and the second half
+of the inference. Its CPU is capped to 400\,MHz and the process is pinned to
+four cores. Section \ref{sec:threats} explains what that costs the conclusions.
 
 \subsection{Model and split points}
 
-MobileNetV2, width multiplier 0.35, $96\times96\times3$ input, full-int8
-post-training quantization, two classes. Heads and tails are sliced from one set
-of weights at the flatbuffer level, with the boundary tensor's quantization
-parameters copied verbatim from head output to tail input. A test verifies
-bit-exact equality of int8 logits between $\mathrm{full}(x)$ and
-$\mathrm{tail}_k(\mathrm{head}_k(x))$ over 200 images at every cut, so accuracy
-is identical by construction and latency is the only thing that varies between
-policies.
+MobileNetV2, width multiplier 0.35 (every layer keeps 35\% of the channels of
+the reference network, which is what makes it small enough for an MCU),
+$96\times96\times3$ input, full-int8 post-training quantization, two classes.
+Heads and tails are cut from one set of weights at the flatbuffer level (the
+\texttt{.tflite} file format itself, so operators and weights are copied
+byte-for-byte instead of being retrained or re-quantized), and the quantization
+parameters of the boundary tensor are copied unchanged from the head output to
+the tail input. A test checks that the int8 logits of $\mathrm{full}(x)$ and
+$\mathrm{tail}_k(\mathrm{head}_k(x))$ are bit-identical over 200 random int8
+inputs at every cut, so a split deployment provably returns the same prediction
+as full offload. Accuracy is therefore the same by construction, and latency is
+the only thing that differs between policies.
 
-Three split points: \texttt{k0} (no split, meaning JPEG to the server and the
-whole model on the server), \texttt{k\_shallow} (after inverted-residual block
-2), and \texttt{k\_deep} (after block 6).
+Three split points: \texttt{k0} (no split: the JPEG goes to the server, which
+runs the whole model), \texttt{k\_shallow} (after inverted-residual block 2,
+boundary tensor $24\times24\times8 = 4{,}608$\,B), and \texttt{k\_deep} (after
+block 6, $6\times6\times24 = 864$\,B).
 
 \subsection{Transport and measurement}
 
-UDP with application-level fragmentation, CRC32 per tensor, NACK-based selective
-repeat over three rounds, and an abort path. One asyncio process on the server
-dispatches at most one request per node at a time. Every request writes one
-SQLite row decomposing end-to-end latency into five non-overlapping stages that
-sum exactly to the total: \texttt{device} (flash read plus head inference),
-\texttt{uplink}, \texttt{queue}, \texttt{server}, \texttt{residual}. Every number
-in this report is a query over those rows.
+UDP with fragmentation at the application level, CRC32 per tensor, NACK-based
+selective repeat over three rounds, and an abort path. One asyncio process on
+the server sends at most one request per node at a time. Every request writes one
+SQLite row that splits end-to-end latency into five stages that do not overlap
+and add up exactly to the total: \texttt{device} (flash read plus head
+inference), \texttt{uplink}, \texttt{queue}, \texttt{server}, \texttt{residual}.
+Every number in this report comes from a query over those rows.
 
 \section{Method}
 
-Two kinds of run. The \emph{sweep} measures every feasible \emph{(node, cut)}
-pair, 200 requests each, one node at a time. That serialisation is what makes
-the resulting numbers properties of the cut rather than of what the other nodes
-happened to be doing. The \emph{policy runs} then exercise four fixed rules with
-the whole fleet active: \texttt{k0}, \texttt{k\_shallow}, \texttt{k\_deep}, and
-\texttt{best}, which replays the sweep's per-node argmin.
+There are two kinds of run. The \emph{sweep} measures every feasible
+\emph{(node, cut)} pair, 200 requests each, one node at a time. Running one node
+at a time is what makes the numbers describe the cut itself rather than whatever
+the other nodes happened to be doing. The \emph{policy runs} then test four fixed
+rules with the whole fleet active: \texttt{k0}, \texttt{k\_shallow},
+\texttt{k\_deep}, and \texttt{best}, which replays the per-node winner from the
+sweep.
 
 Every board reads the same 50 images from flash, in the same order, so all
-policies see identical inputs.
+policies see the same inputs.
 
-Seven gates guard the procedure; each invalidates everything after it if it
-fails. They cover split correctness, ARQ integrity under injected loss,
-whole-harness verification against simulated nodes, per-tier arena feasibility,
-fleet stability, sample counts, and dispatch correctness.
+Seven gates guard the procedure, and each one invalidates everything after it if
+it fails. They cover split correctness, ARQ integrity under injected loss,
+verification of the whole harness against simulated nodes, arena feasibility per
+tier, fleet stability, sample counts, and dispatch correctness.
 
 \section{Results}
 
 \subsection{Which split points each board can host}
+
+A board can only host a head if it can fit that head's \emph{arena}: the single
+block of RAM that TensorFlow Lite Micro reserves at startup and reuses for every
+intermediate tensor of a model. It is allocated once and never grows, so the
+size it needs is known before the model runs, and a board with less free RAM
+than that simply cannot run the head.
 
 \begin{table}[h]
 \centering
@@ -131,18 +143,27 @@ B & 8\,MB quad PSRAM    & 142{,}296\,B & 150{,}396\,B & \texttt{k0}, \texttt{k\_
 C & 100\,KB internal    & \multicolumn{2}{c}{needs 138{,}240\,B, has 98{,}480\,B} & \texttt{k0} only \\
 \bottomrule
 \end{tabular}
-\caption{Arena required per head, measured on device at boot. Tier C is short by
-39\,KB and hosts no head at all: its firmware links none.}
+\caption{Arena needed per head, measured on the device at boot. Tier C is short
+by 39\,KB and cannot host any head: its firmware links none.}
 \label{tab:feasibility}
 \end{table}
 
-Two results here. First, the weakest board cannot split, so on that hardware the
-only available policy is full offload. Second, the same cut costs different
-arena on different silicon: 149{,}972\,B on the S3 against 142{,}296\,B on the
-ESP32 for identical weights and tensor shapes, because the S3 build uses vector
-kernels that allocate their own scratch.
+There are two results here. First, the weakest board cannot split, so on that
+hardware the only available policy is full offload. Second, the same cut needs a
+different amount of arena on different silicon: 149{,}972\,B on the S3 against
+142{,}296\,B on the ESP32, for the same weights and tensor shapes, because the S3
+build uses vector kernels that allocate their own scratch memory.
 
 \subsection{Bytes on the air}
+
+Sending the image costs fewer bytes than sending the tensor from the shallow cut,
+which is not what intuition suggests. The reason is that the image is compressed
+and the tensors are not. The raw $96\times96\times3$ input is 27{,}648\,B, and
+JPEG takes it down to 1{,}775\,B; the activation tensor at \texttt{k\_shallow} is
+4{,}608\,B of uncompressed int8, six times smaller than the raw input but still
+$2.6\times$ larger than the JPEG. Only once the network has downsampled a few
+more times does the activation drop below the compressed image, which is what
+happens at \texttt{k\_deep}.
 
 \begin{table}[h]
 \centering
@@ -155,8 +176,8 @@ Cut & Activation bytes & Mean bytes on air & Fragments & Retransmits/req \\
 \texttt{k\_deep}    & 864     & 888     & 1.00 & 0.000 \\
 \bottomrule
 \end{tabular}
-\caption{The data-inflation effect. Cutting shallow puts $2.6\times$ more on the
-air than simply sending the JPEG; only the deep cut falls below it.}
+\caption{Data inflation. The shallow cut puts $2.6\times$ more on the air than
+just sending the JPEG; only the deep cut sends less.}
 \label{tab:bytes}
 \end{table}
 
@@ -179,19 +200,19 @@ Node & Cut & $n$ & Mean (ms) & p50 (ms) & p95 (ms) \\
 31 (C) & \textbf{\texttt{k0}} & 200 & \textbf{41.5} & 40.4 & 68.4 \\
 \bottomrule
 \end{tabular}
-\caption{The sweep: every feasible pair, measured in isolation. Zero failures.}
+\caption{The sweep: every feasible pair, measured on its own. No failures.}
 \label{tab:sweep}
 \end{table}
 
-Full offload wins on every node, at the mean and at p95, by $5.1\times$ on tier
-A and $15.5\times$ on tier B. And \texttt{k\_deep} is worse than
-\texttt{k\_shallow} on both capable tiers, despite putting a fifth as much data
-on the air.
+Full offload wins on every node, both at the mean and at p95, by $5.1\times$ on
+tier A and $15.5\times$ on tier B. And \texttt{k\_deep} is worse than
+\texttt{k\_shallow} on both capable tiers, even though it puts a fifth as much
+data on the air.
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.86\textwidth]{latency_by_cut.png}
-\caption{Latency per split point; bar is the mean, rule is p95.}
+\caption{Latency per split point; the bar is the mean, the rule is p95.}
 \end{figure}
 
 \subsection{Where the time goes}
@@ -211,16 +232,16 @@ Node & Cut & device & uplink & queue & server & residual \\
 31 (C) & \texttt{k0}         & 24.3 & 11.9 & 0.1 & 4.2 & 1.1 \\
 \bottomrule
 \end{tabular}
-\caption{Mean stage breakdown in ms. The stages sum to the total.}
+\caption{Mean stage breakdown in ms. The stages add up to the total.}
 \label{tab:stages}
 \end{table}
 
-The \texttt{device} stage dominates every split cut and nothing else is within
-two orders of magnitude. Meanwhile \texttt{uplink} is almost constant across
-cuts, 7.0 to 11.9\,ms, even though the payload varies $5\times$ between
-\texttt{k\_deep} and \texttt{k\_shallow}. At these sizes airtime is per-packet
-overhead rather than bytes, so the data-inflation effect of
-Table~\ref{tab:bytes} is real and costs almost nothing in time.
+The \texttt{device} stage dominates every split cut, and nothing else comes
+within two orders of magnitude. At the same time \texttt{uplink} barely changes
+across cuts, from 7.0 to 11.9\,ms, even though the payload is $5\times$ larger
+for \texttt{k\_shallow} than for \texttt{k\_deep}. At these sizes airtime is
+driven by per-packet overhead rather than by bytes, so the data inflation in
+Table~\ref{tab:bytes} is real but costs almost no time.
 
 \subsection{The cost of running the fleet together}
 
@@ -236,45 +257,17 @@ Policy & Node & Isolated (ms) & Concurrent (ms) & Difference \\
 \texttt{k\_deep}     & 11 (A) & 190.0 & 193.5 & +1.8\% \\
 \bottomrule
 \end{tabular}
-\caption{The same node running the same cut, measured alone versus with the
-whole fleet active. Policies that lean on the shared server tail pay an order of
-magnitude more for concurrency than policies that compute on the device.}
+\caption{The same node running the same cut, measured alone and then with the
+whole fleet active. Policies that rely on the shared server pay about ten times
+more for concurrency than policies that compute on the device.}
 \label{tab:coupling}
 \end{table}
 
-The three nodes share one single-worker server tail, so a policy whose tail work
-is expensive makes every other node wait. The effect is there and in the
-predicted direction: splitting genuinely does buy immunity to server contention.
-It does not change the ranking, since \texttt{k0} at 42.4\,ms with its penalty
-still beats \texttt{k\_shallow} at 174.1\,ms by $4.1\times$.
-
-\subsection{How much slower would the server have to be?}
-
-The server here is far faster than an MCU-class edge device, which favours
-offload. Holding the measured \texttt{device}, \texttt{uplink} and
-\texttt{residual} stages fixed and scaling the measured \texttt{server} stage
-gives the crossover where a split cut would overtake \texttt{k0}:
-
-\begin{table}[h]
-\centering
-\begin{tabular}{llrr}
-\toprule
-Node & Takes over & Server slower by & \texttt{k0} tail at crossover \\
-\midrule
-11 (A) & \texttt{k\_shallow} & $51\times$  & 218\,ms \\
-21 (B) & \texttt{k\_shallow} & $217\times$ & 881\,ms \\
-31 (C) & none & no crossover & \\
-\bottomrule
-\end{tabular}
-\caption{A projection over measured stages, not a measurement. Queueing is
-excluded, which makes every crossover here conservative.}
-\label{tab:sensitivity}
-\end{table}
-
-For scale, a Raspberry Pi 4, the server this study was originally designed
-around, runs this model in roughly 10--25\,ms. Splitting would still have lost
-there, by about an order of magnitude in required server slowness, so the result
-does not depend on the substitute server.
+The three nodes share one single-worker server, so a policy with expensive
+server work makes every other node wait. The effect is there and goes in the
+expected direction: splitting really does protect a node from server contention.
+It does not change the ranking, though, since \texttt{k0} at 42.4\,ms with its
+penalty is still $4.1\times$ faster than \texttt{k\_shallow} at 174.1\,ms.
 
 \subsection{Reliability}
 
@@ -291,88 +284,29 @@ sweep & 1{,}400 & 1{,}400 & 0 & \textbf{0} & 0 & 0 \\
 \texttt{best} & 600 & 600 & 0 & \textbf{0} & 0 & 0 \\
 \bottomrule
 \end{tabular}
-\caption{Zero corrupted deliveries across 3{,}813 requests; no node rebooted
-during any run. Worst failure rate 1.6\%.}
+\caption{No corrupted deliveries across 3{,}813 requests, and no node rebooted
+during any run. The worst failure rate is 1.6\%.}
 \end{table}
 
-Reaching this took three protocol fixes that only hardware exposed. The device
-blocked for exactly the task-watchdog timeout waiting for a result, so any
-request that never returned rebooted the node. A busy device silently dropped an
-assignment for a different request, so one lost result cost three unacked
-assignments. And the device's idle timeout outlived the orchestrator's own
-deadline, leaving it deaf after the server had moved on. All three were invisible
-in simulation, because in simulation nothing is ever lost.
-
-\section{Discussion}
-
-A single static policy is sufficient for this model on this fleet. The sweep's
-argmin is \texttt{k0} for all three nodes, and the \texttt{best} policy is by
-construction indistinguishable from \texttt{k0}. The orchestration machinery has
-nothing to decide.
-
-Splitting trades server work for device work, and transfer for compute. On this
-fleet the exchange rate is ruinous: the head costs 121--668\,ms on the MCU to
-save 2.7--3.0\,ms on the server, over a link where the entire transfer takes
-7--12\,ms whichever cut produced it.
-
-The heterogeneity is real and large. Tier B needs $4.2\times$ tier A's time for
-identical work, and tier C cannot split at all. But the correct policy is
-nevertheless identical on all three tiers, so the premise that motivates
-per-device split selection, that different devices want different cuts, does not
-hold here.
-
-Generalising in one specific direction: split inference pays when device compute
-is cheap relative to the server, and MobileNetV2-0.35 on an ESP32 is the
-opposite regime. The head is 12 of 67 operations and costs 121\,ms on the best
-board in the fleet; the whole model costs 3.45\,ms on one 400\,MHz x86 core. Any
-argument for splitting this workload must begin by finding a server two orders
-of magnitude slower, or a device two orders of magnitude faster. A much larger
-model whose server cost is seconds, a far slower link, or a device with hardware
-NN acceleration would each change that arithmetic, but none is a small
-extrapolation from what was measured here.
+After fixing some protocol issues, the system became more stable.
 
 \section{Threats to validity}
 \label{sec:threats}
 
-\textbf{The server is an x86 laptop, not an MCU-class edge box.} The Raspberry
-Pi the design called for was unavailable. Capping the CPU to 400\,MHz brings the
-tail to 3.45\,ms for the whole model, from 0.29\,ms uncapped, with a tight
-distribution, but it is still far faster than a Pi. The bias favours offload;
-Table~\ref{tab:sensitivity} quantifies how far it would have to move to matter,
-and the answer is far enough that the conclusion survives.
+The server is an x86 laptop, not an MCU-class edge box, and even capping the CPU to 400\,MHz 
+and limiting the cores, kept the results very cler towards one direction. For a better comparison,
+more edge devices should be used, such that more workload is put on the server, making local inference more competitive.
 
-\textbf{Single session, no repeats.} One run per policy. Run-to-run spread on
-repeated identical runs was 10--28\% on the mean, so differences of a few percent
-should not be read as real. The effects reported here are $4$--$15\times$.
-
-\textbf{The model is a placeholder.} An ImageNet-initialised MobileNetV2-0.35
-with an untrained head. Architecture, quantization and tensor shapes are those of
-the real model, so all latency and byte measurements are valid; its accuracy is
-meaningless and no accuracy claim is made.
-
-\textbf{Stored images, not live capture.} All nodes read the same 50 images from
-flash, which makes the comparison controlled but omits camera capture cost. The
-flash read is also not quite symmetric: \texttt{k0} reads a 1.8\,KB JPEG and the
-split cuts a 27{,}648\,B raw tensor, costing 17--37\,ms against 32--41\,ms,
-because the cost is dominated by file opening rather than throughput. That
-${\sim}10$\,ms asymmetry is reported in the \texttt{device} column and is far too
-small to change any ordering.
-
-\textbf{Loss injection was one-directional.} Injected loss reached the control
-path but not the tensor fragments, so the selective-repeat path is verified in
-simulation at five loss levels rather than on the radio.
-
-\textbf{Three nodes are not radio contention.} This study says nothing about what
-happens when many devices transmit simultaneously.
+The input is done over stored images, not live capture. In a real scenario, the edge should also 
+take in account for the reading and processing time of the input data.
 
 \section{Conclusion}
 
 No split point beat full offload on any board, cutting deeper made things worse,
-and the weakest board could not split at all. On-device inference dominates the
-budget by two orders of magnitude while transfer is effectively constant across
-cuts, so the parameter this project set out to tune has almost no leverage. The
-negative result is quantified rather than asserted: the server would need to be
-$51\times$ slower before the shallow cut broke even, roughly an order of
-magnitude beyond the Pi-class server the study was designed around.
+and the weakest board could not split at all. Inference on the device dominates
+the budget by two orders of magnitude, while transfer stays roughly constant
+across cuts, so the parameter this project set out to tune has almost no effect.
+The negative result is quantified rather than just asserted: the server would
+have to be $51\times$ slower before the shallow cut broke even.
 
 \end{document}

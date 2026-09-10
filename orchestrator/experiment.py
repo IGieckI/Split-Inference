@@ -71,7 +71,7 @@ async def amain(args):
 
     khz = cpu_max_khz()
     print(f"[experiment] server CPU ceiling {khz // 1000 if khz else '?'} MHz "
-          f"(capped for the session - see REPORT.md section 3.1)")
+          f"(capped for the session - see report/fleetsplit.tex, 'Threats to validity')")
     print(f"[experiment] run {run_id}: waiting for {len(cfg.nodes)} nodes ...")
     deadline = time.monotonic() + args.wait_timeout
     while len(registry.alive()) < len(cfg.nodes):
