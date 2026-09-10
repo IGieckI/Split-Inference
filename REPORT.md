@@ -1,9 +1,8 @@
 # Split inference on a heterogeneous ESP32 fleet: measuring the cost of the split point
 
-**Status: results pending.** The system is built and verified; every table and
-figure below has a placeholder that `analysis/figures.py` fills from the run
-DBs. Run `README.md`, then `make figures`, then paste the tables from
-`analysis/out/results.md` into the marked slots.
+**Status: complete.** Every table and figure below is generated from the run
+DBs by `analysis/figures.py` - regenerate them with `make figures`. The
+procedure that produced the runs is in `README.md`.
 
 ## 1. The question
 
@@ -304,11 +303,10 @@ Measured with one node active at a time, so these are properties of the
 `(node, cut)` pair alone.
 
 **The question this table answers:** does the winning cut differ between tiers?
-If tier A's argmin is a deep cut while tier C's is `k0`, the headline result is
-that *the right split point is a property of the device, not of the model* -
-which is exactly why a single static split for a whole fleet is the wrong
-design. If instead one cut wins everywhere, that is an equally publishable
-negative result and section 6 should say so plainly.
+It does not. `k0` is the argmin on all three nodes, and not narrowly - 5.1x on
+tier A, 15.5x on tier B, and tier C has no feasible split to compare against.
+The winning cut is a property of the model and the transport here, not of the
+device; section 6 takes that apart.
 
 ### 5.3 Where the time actually goes
 
